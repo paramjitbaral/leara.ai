@@ -97,6 +97,7 @@ export const Dashboard: React.FC = () => {
   const [newProjectDesc, setNewProjectDesc] = useState('');
   const [githubUrl, setGithubUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
 
   const handleProjectClick = (project: any) => {
     setActiveProject(project);
@@ -204,6 +205,16 @@ export const Dashboard: React.FC = () => {
   const importRepo = async () => {
     if (!user || !githubUrl.trim()) return;
     setIsSubmitting(true);
+    setImportProgress(0);
+    
+    // Simulate progress
+    const progressInterval = setInterval(() => {
+      setImportProgress(prev => {
+        if (prev >= 95) return prev;
+        return prev + Math.floor(Math.random() * 10);
+      });
+    }, 400);
+
     try {
       const res = await axios.post('/api/github/import', { 
         userId, 
@@ -212,6 +223,8 @@ export const Dashboard: React.FC = () => {
       
       const repoName = res.data.folder;
       const fileTree = res.data.fileTree;
+
+      let newProject: any = null;
 
       try {
         const docRef = await addDoc(collection(db, 'projects'), {
@@ -231,6 +244,19 @@ export const Dashboard: React.FC = () => {
         });
         
         const projectId = docRef.id;
+        newProject = {
+          id: projectId,
+          name: repoName,
+          description: `Imported from ${githubUrl}`,
+          folderName: repoName,
+          template: 'GitHub',
+          status: 'Active',
+          ownerId: user.uid,
+          user: {
+            name: user.displayName,
+            avatar: user.photoURL || `https://picsum.photos/seed/${user.uid}/32/32`
+          }
+        };
         
         // Backup all imported files to Firestore
         if (fileTree) {
@@ -242,9 +268,18 @@ export const Dashboard: React.FC = () => {
         handleFirestoreError(err, OperationType.CREATE, 'projects');
       }
 
-      toast.success('Repository imported successfully!');
-      setIsImportDialogOpen(false);
-      setGithubUrl('');
+      setImportProgress(100);
+      setTimeout(() => {
+        toast.success('Repository imported successfully!');
+        setIsImportDialogOpen(false);
+        setGithubUrl('');
+        setImportProgress(0);
+        // Automatically open the project
+        if (newProject) {
+          handleProjectClick(newProject);
+        }
+      }, 500);
+
     } catch (error: any) {
       console.error("Error importing repo:", error);
       const errorMessage = error.response?.data?.error || error.message || 'Failed to import repository';
@@ -254,6 +289,7 @@ export const Dashboard: React.FC = () => {
         description: errorDetails ? `${errorMessage}: ${errorDetails}` : errorMessage,
       });
     } finally {
+      clearInterval(progressInterval);
       setIsSubmitting(false);
     }
   };
@@ -1008,11 +1044,22 @@ export const Dashboard: React.FC = () => {
                 onClick={importRepo}
                 disabled={isSubmitting || !githubUrl.trim()}
                 className={cn(
-                  "w-full py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100",
+                  "w-full py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center relative overflow-hidden",
                   "bg-emerald-500 text-black"
                 )}
               >
-                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Import Repository'}
+                {isSubmitting ? (
+                  <>
+                    <div 
+                      className="absolute inset-0 bg-white/20 transition-all duration-300 pointer-events-none" 
+                      style={{ width: `${importProgress}%` }}
+                    />
+                    <span className="relative z-10 flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Importing... {importProgress}%
+                    </span>
+                  </>
+                ) : 'Import Repository'}
               </button>
             </div>
           </Dialog.Content>
