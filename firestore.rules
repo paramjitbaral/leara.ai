@@ -1,0 +1,133 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: projects
+    // Document ID: projectId (auto-generated)
+    // Fields:
+    //   - name: string (required, 1-100 chars)
+    //   - description: string (optional, 0-500 chars)
+    //   - folderName: string (required, 1-100 chars)
+    //   - template: string (required, e.g., 'React', 'GitHub')
+    //   - status: string (required, e.g., 'Active')
+    //   - ownerId: string (required, matches auth.uid)
+    //   - createdAt: timestamp (required)
+    //   - updatedAt: timestamp (required)
+    //   - isStarred: boolean (required)
+    //   - user: map (required)
+    //     - name: string
+    //     - avatar: string
+    //
+    // Collection: projects/{projectId}/files
+    // Document ID: fileId (auto-generated)
+    // Fields:
+    //   - name: string (required)
+    //   - content: string (required)
+    //   - language: string (optional)
+    //   - projectId: string (required)
+    //   - path: string (optional)
+    //
+    // Collection: userProgress
+    // Document ID: progressId (auto-generated)
+    // Fields:
+    //   - userId: string (required, matches auth.uid)
+    //   - projectId: string (required)
+    //   - completedDays: list (required)
+    //   - lastActiveFile: string (optional)
+    //
+    // Collection: aiCache
+    // Document ID: cacheId (auto-generated)
+    // Fields:
+    //   - hash: string (required)
+    //   - explanation: map (optional)
+    //   - exercises: list (optional)
+    //   - questions: list (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isProjectOwner(projectId) {
+      return isAuthenticated() && get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidProject(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.folderName is string && data.folderName.size() > 0 && data.folderName.size() <= 100 &&
+             data.ownerId == request.auth.uid &&
+             data.isStarred is bool &&
+             data.user is map &&
+             data.template is string &&
+             data.status is string &&
+             (data.createdAt is timestamp || data.createdAt == request.time) &&
+             (data.updatedAt is timestamp || data.updatedAt == request.time);
+    }
+
+    function isValidFile(data) {
+      return data.name is string && data.name.size() > 0 &&
+             data.content is string &&
+             data.projectId is string &&
+             (data.type == 'file' || data.type == 'directory') &&
+             data.path is string;
+    }
+
+    function isValidUserProgress(data) {
+      return data.userId == request.auth.uid &&
+             data.projectId is string &&
+             data.completedDays is list;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    // Projects
+    match /projects/{projectId} {
+      allow read: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidProject(request.resource.data);
+      allow update: if isAuthenticated() && resource.data.ownerId == request.auth.uid && isValidProject(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
+
+      // Files subcollection
+      match /files/{fileId} {
+        allow read: if isProjectOwner(projectId);
+        allow create, update: if isProjectOwner(projectId) && isValidFile(request.resource.data);
+        allow delete: if isProjectOwner(projectId);
+      }
+    }
+
+    // User Progress
+    match /userProgress/{progressId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create, update: if isAuthenticated() && isValidUserProgress(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // AI Cache
+    match /aiCache/{cacheId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.hash is string;
+    }
+  }
+}

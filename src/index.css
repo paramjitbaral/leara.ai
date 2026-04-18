@@ -1,0 +1,485 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+@import "tailwindcss";
+@import "@xterm/xterm/css/xterm.css";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Playfair Display", serif;
+}
+
+@layer utilities {
+  .bg-mesh {
+    background-color: #0a0a0a;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.1) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(20, 184, 166, 0.1) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, rgba(20, 184, 166, 0.05) 0px, transparent 50%);
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.animate-shake {
+  animation: shake 0.2s ease-in-out 0s 2;
+}
+
+@layer base {
+  :root {
+    --bg-color: #1e1e1e;
+  }
+
+  :root.light {
+    --bg-color: white;
+  }
+
+  html, body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: var(--bg-color);
+  }
+
+  #root {
+    width: 100%;
+    height: 100%;
+  }
+
+  body {
+    @apply text-[#cccccc] font-sans transition-colors duration-300;
+  }
+
+  /* Global transition for smoother theme switching */
+  *, *::before, *::after {
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
+  }
+
+  body.light {
+    @apply bg-white text-zinc-900;
+  }
+
+  body.light .bg-\[\#080808\] {
+    background-color: white !important;
+  }
+
+  body.light .bg-\[\#080808\]\/80 {
+    background-color: rgba(255, 255, 255, 0.8) !important;
+  }
+
+  body.light .bg-black\/90 {
+    background-color: rgba(255, 255, 255, 0.9) !important;
+  }
+
+  body.light .bg-black\/80 {
+    background-color: rgba(255, 255, 255, 0.8) !important;
+  }
+
+  body.light .bg-black\/50 {
+    background-color: rgba(255, 255, 255, 0.5) !important;
+  }
+
+  body.light .bg-\[\#121212\] {
+    background-color: white !important;
+  }
+
+  body.light .bg-\[\#0d0d0d\] {
+    background-color: var(--color-zinc-50) !important;
+  }
+
+  body.light .border-\[\#222\] {
+    border-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .border-\[\#444444\] {
+    border-color: var(--color-zinc-300) !important;
+  }
+
+  body.light .bg-\[\#1a1a1a\] {
+    background-color: var(--color-zinc-100) !important;
+  }
+
+  body.light .bg-\[\#18181b\] {
+    background-color: var(--color-zinc-100) !important;
+  }
+
+  body.light .bg-\[\#1e1e1e\] {
+    background-color: white !important;
+  }
+
+  body.light .bg-\[\#1e1e1e\]\/80 {
+    background-color: rgba(255, 255, 255, 0.8) !important;
+  }
+
+  body.light .bg-\[\#252526\] {
+    background-color: var(--color-zinc-50) !important;
+  }
+
+  body.light .bg-\[\#2d2d2d\] {
+    background-color: var(--color-zinc-100) !important;
+  }
+
+  body.light .bg-\[\#2a2d2e\] {
+    background-color: var(--color-zinc-100) !important;
+  }
+
+  body.light .bg-\[\#2a2d2e\] {
+    background-color: var(--color-zinc-100) !important;
+  }
+
+  body.light .hover\:bg-\[\#2a2d2e\]:hover {
+    background-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .bg-\[\#333333\] {
+    background-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .bg-\[\#444444\] {
+    background-color: var(--color-zinc-300) !important;
+  }
+
+  body.light .border-\[\#333333\] {
+    border-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .border-\[\#444444\] {
+    border-color: var(--color-zinc-300) !important;
+  }
+
+  body.light .border-\[\#454545\] {
+    border-color: var(--color-zinc-300) !important;
+  }
+
+  body.light .bg-\[\#454545\] {
+    background-color: var(--color-zinc-300) !important;
+  }
+
+  body.light .bg-\[\#27272a\] {
+    background-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .bg-\[\#3f3f46\] {
+    background-color: var(--color-zinc-300) !important;
+  }
+
+  body.light .bg-\[\#52525b\] {
+    background-color: var(--color-zinc-400) !important;
+  }
+
+  body.light .bg-\[\#080808\] {
+    background-color: var(--color-white) !important;
+    color: var(--color-zinc-900) !important;
+  }
+
+  body.light .bg-\[\#0a0a0a\] {
+    background-color: var(--color-zinc-50) !important;
+  }
+
+  body.light .border-\[\#333333\] {
+    border-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .bg-\[\#252526\] {
+    background-color: var(--color-zinc-50) !important;
+    color: var(--color-zinc-900) !important;
+  }
+
+  body.light .hover\:bg-\[\#2a2d2e\]:hover {
+    background-color: var(--color-zinc-100) !important;
+  }
+
+  body.light .bg-\[\#37373d\] {
+    background-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .hover\:bg-\[\#3c3c3c\]:hover {
+    background-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .border-\[\#454545\] {
+    border-color: var(--color-zinc-300) !important;
+  }
+
+  body.light .hover\:bg-\[\#37373d\]:hover {
+    background-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .hover\:bg-\[\#444444\]:hover {
+    background-color: var(--color-zinc-300) !important;
+  }
+
+  body.light .text-\[\#cccccc\] {
+    color: var(--color-zinc-700) !important;
+  }
+
+  body.light .text-zinc-300 {
+    color: var(--color-zinc-700) !important;
+  }
+
+  body.light .bg-\[\#0a0a0a\] {
+    background-color: var(--color-zinc-50) !important;
+  }
+
+  body.light .bg-\[\#0f0f0f\] {
+    background-color: white !important;
+    border-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .bg-\[\#111\] {
+    background-color: var(--color-zinc-100) !important;
+    border-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .text-\[\#e1e1e1\] {
+    color: var(--color-zinc-800) !important;
+  }
+
+  body.light .bg-\[\#444444\] {
+    background-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .bg-zinc-800 {
+    background-color: var(--color-zinc-100) !important;
+  }
+
+  body.light .text-white {
+    color: var(--color-zinc-900) !important;
+  }
+
+  body.light .bg-emerald-600 {
+    background-color: var(--color-emerald-600) !important;
+  }
+
+  body.light .bg-emerald-600 .text-white {
+    color: white !important;
+  }
+
+  body.light .text-zinc-400 {
+    color: var(--color-zinc-600) !important;
+  }
+
+  body.light .text-zinc-500 {
+    color: var(--color-zinc-600) !important;
+  }
+
+  body.light .text-zinc-600 {
+    color: var(--color-zinc-700) !important;
+  }
+
+  body.light .bg-amber-500\/10 {
+    background-color: var(--color-amber-50) !important;
+  }
+
+  body.light .bg-amber-500\/20 {
+    background-color: var(--color-amber-100) !important;
+  }
+
+  body.light .bg-\[\#0f0f0f\] {
+    background-color: var(--color-zinc-100) !important;
+  }
+
+  body.light .bg-\[\#1e1e1e\] {
+    background-color: var(--color-white) !important;
+    color: var(--color-zinc-900) !important;
+  }
+
+  body.light .text-amber-400 {
+    color: var(--color-amber-700) !important;
+  }
+
+  body.light .border-amber-500\/20 {
+    border-color: var(--color-amber-200) !important;
+  }
+
+  body.light .text-red-400 {
+    color: var(--color-red-600) !important;
+  }
+
+  body.light .border-red-500\/20 {
+    border-color: var(--color-red-200) !important;
+  }
+
+  body.light .border-white\/5 {
+    border-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .border-white\/10 {
+    border-color: var(--color-zinc-300) !important;
+  }
+
+  body.light .bg-white\/5 {
+    background-color: var(--color-zinc-100) !important;
+  }
+
+  body.light .bg-white\/10 {
+    background-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .hover\:bg-white\/5:hover {
+    background-color: var(--color-zinc-100) !important;
+  }
+
+  body.light .hover\:bg-white\/10:hover {
+    background-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .bg-zinc-950 {
+    background-color: white !important;
+  }
+
+  body.light .bg-zinc-900 {
+    background-color: var(--color-zinc-100) !important;
+  }
+
+  body.light .bg-zinc-800 {
+    background-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .bg-zinc-700 {
+    background-color: var(--color-zinc-300) !important;
+  }
+
+  body.light .bg-red-500\/5 {
+    background-color: var(--color-red-50) !important;
+  }
+
+  body.light .bg-red-500\/10 {
+    background-color: var(--color-red-100) !important;
+  }
+
+  body.light .bg-emerald-500\/10 {
+    background-color: var(--color-emerald-50) !important;
+  }
+
+  body.light .bg-emerald-500\/20 {
+    background-color: var(--color-emerald-100) !important;
+  }
+
+  body.light .from-emerald-500\/20 {
+    --tw-gradient-from: var(--color-emerald-100) !important;
+  }
+
+  body.light .from-emerald-500\/10 {
+    --tw-gradient-from: var(--color-emerald-50) !important;
+  }
+
+  body.light .to-teal-500\/5 {
+    --tw-gradient-to: var(--color-teal-50) !important;
+  }
+
+  body.light .to-teal-600 {
+    --tw-gradient-to: var(--color-teal-700) !important;
+  }
+
+  body.light .border-white\/5 {
+    border-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .border-white\/10 {
+    border-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .border-zinc-800 {
+    border-color: var(--color-zinc-200) !important;
+  }
+
+  body.light .border-zinc-700 {
+    border-color: var(--color-zinc-300) !important;
+  }
+
+  body.light .border-emerald-500\/20 {
+    border-color: var(--color-emerald-200) !important;
+  }
+
+  body.light .text-emerald-400 {
+    color: var(--color-emerald-600) !important;
+  }
+
+  body.light .data-\[state\=active\]\:bg-\[\#1e1e1e\][data-state=active] {
+    background-color: white !important;
+  }
+
+  body.light .data-\[state\=active\]\:text-emerald-400[data-state=active] {
+    color: var(--color-emerald-600) !important;
+  }
+
+  body.light .data-\[state\=active\]\:border-emerald-400[data-state=active] {
+    border-color: var(--color-emerald-600) !important;
+  }
+
+  /* Custom Scrollbar for VS Code feel */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #333333;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #444444;
+  }
+
+  /* Utility Scrollbar Classes */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+  }
+  .scrollbar-thumb-zinc-800::-webkit-scrollbar-thumb {
+    background-color: #27272a;
+  }
+  .scrollbar-track-transparent::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+}
+
+/* Markdown Styles for Copilot */
+.prose-invert {
+  @apply text-zinc-300;
+}
+body.light .prose-invert {
+  @apply text-zinc-700;
+}
+.prose-invert h1, .prose-invert h2, .prose-invert h3 {
+  @apply text-white font-bold mt-4 mb-2;
+}
+body.light .prose-invert h1, body.light .prose-invert h2, body.light .prose-invert h3 {
+  @apply text-zinc-900;
+}
+.prose-invert code {
+  @apply bg-[#1e1e1e] px-1.5 py-0.5 rounded text-emerald-400 font-mono text-xs;
+}
+body.light .prose-invert code {
+  @apply bg-zinc-100 text-emerald-600;
+}
+.prose-invert pre {
+  @apply bg-[#0a0a0a] p-3 rounded-lg border border-[#333333] my-4 overflow-x-auto;
+}
+body.light .prose-invert pre {
+  @apply bg-zinc-50 border-zinc-200;
+}
+.prose-invert pre code {
+  @apply bg-transparent p-0 text-zinc-300;
+}
+body.light .prose-invert pre code {
+  @apply text-zinc-700;
+}
+.prose-invert ul {
+  @apply list-disc list-inside space-y-1 my-2;
+}
+.prose-invert p {
+  @apply my-2 leading-relaxed;
+}

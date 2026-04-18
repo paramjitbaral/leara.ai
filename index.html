@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Leara.ai</title>
+</head>
+
+<body class="light">
+  <div id="root"></div>
+  <script>
+    (function () {
+      const savedTheme = localStorage.getItem('app-theme');
+      if (savedTheme === 'dark') {
+        document.body.classList.remove('light');
+      } else if (savedTheme === 'light') {
+        document.body.classList.add('light');
+      }
+    })();
+  </script>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>
