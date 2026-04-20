@@ -208,50 +208,49 @@ app.post("/api/github/import", async (req, res) => {
     const { promisify } = await import('util');
     const execAsync = promisify(exec);
 
-    try {
-      // Use --depth 1 for faster clones
-      // GIT_TERMINAL_PROMPT=0 prevents hanging on private repos
-      console.log(`Executing: git clone --depth 1 "${cleanUrl}" "${targetPath}"`);
-      const { stdout, stderr } = await execAsync(`git clone --depth 1 "${cleanUrl}" "${targetPath}"`, {
-        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-        cwd: userPath,
-        timeout: 25000 // Increase to 25 seconds (Vercel limit is 10-30s depending on plan)
-      });
-      
-      console.log(`[GIT CLONE SUCCESS] ${cleanUrl}`);
+    // Use --depth 1 for faster clones
+    // GIT_TERMINAL_PROMPT=0 prevents hanging on private repos
+    console.log(`Executing: git clone --depth 1 "${cleanUrl}" "${targetPath}"`);
+    const { stdout, stderr } = await execAsync(`git clone --depth 1 "${cleanUrl}" "${targetPath}"`, {
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      cwd: userPath,
+      timeout: 25000 // Increase to 25 seconds (Vercel limit is 10-30s depending on plan)
+    });
+    
+    console.log(`[GIT CLONE SUCCESS] ${cleanUrl}`);
 
-      const getFileTree = async (dir: string, base: string = ""): Promise<any[]> => {
-        const entries = await fs.readdir(dir, { withFileTypes: true });
-        const nodes = await Promise.all(entries.map(async (entry) => {
-          const relativePath = path.join(base, entry.name);
-          const fullPath = path.join(dir, entry.name);
-          
-          if (entry.name.startsWith('.') || entry.name === 'node_modules') return null;
+    const getFileTree = async (dir: string, base: string = ""): Promise<any[]> => {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      const nodes = await Promise.all(entries.map(async (entry) => {
+        const relativePath = path.join(base, entry.name);
+        const fullPath = path.join(dir, entry.name);
+        
+        if (entry.name.startsWith('.') || entry.name === 'node_modules') return null;
 
-          if (entry.isDirectory()) {
-            return {
-              id: relativePath,
-              name: entry.name,
-              type: "directory",
-              children: await getFileTree(fullPath, relativePath)
-            };
-          } else {
-            return {
-              id: relativePath,
-              name: entry.name,
-              type: "file"
-            };
-          }
-        }));
-        return nodes.filter(Boolean);
-      };
+        if (entry.isDirectory()) {
+          return {
+            id: relativePath,
+            name: entry.name,
+            type: "directory",
+            children: await getFileTree(fullPath, relativePath)
+          };
+        } else {
+          return {
+            id: relativePath,
+            name: entry.name,
+            type: "file"
+          };
+        }
+      }));
+      return nodes.filter(Boolean);
+    };
 
-      const fileTree = await getFileTree(targetPath, repoName);
-      res.json({ success: true, folder: repoName, fileTree });
-    } catch (err: any) {
-      console.error("GLOBAL IMPORT ERROR:", err);
-      res.status(500).json({ error: "Import system failure", details: err.message });
-    }
+    const fileTree = await getFileTree(targetPath, repoName);
+    res.json({ success: true, folder: repoName, fileTree });
+  } catch (err: any) {
+    console.error("GLOBAL IMPORT ERROR:", err);
+    res.status(500).json({ error: "Import system failure", details: err.message });
+  }
 });
 
 import OpenAI from "openai";
