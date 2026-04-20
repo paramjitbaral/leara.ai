@@ -364,11 +364,41 @@ export function FileExplorer() {
             <FolderPlus className="w-3.5 h-3.5" />
           </button>
           <button 
+            onClick={async () => {
+              if (!activeProject || !userId) return;
+              setLoading(true);
+              toast.info('Restoring files from cloud...');
+              try {
+                const filesRef = collection(db, 'projects', activeProject.id, 'files');
+                const snapshot = await getDocs(filesRef);
+                if (!snapshot.empty) {
+                  const backupFiles = snapshot.docs.map(doc => doc.data());
+                  await axios.post('/api/files/sync', { 
+                    userId, 
+                    files: backupFiles.map(f => ({ path: f.path, content: f.content, type: f.type })) 
+                  });
+                  fetchFiles();
+                  toast.success('Restored from cloud');
+                } else {
+                  toast.error('No cloud backups found for this project');
+                }
+              } catch (e) {
+                toast.error('Restore failed');
+              } finally {
+                setLoading(false);
+              }
+            }} 
+            className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white" 
+            title="Restore from Cloud"
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
+          </button>
+          <button 
             onClick={() => fetchFiles()} 
             className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white" 
             title="Refresh"
           >
-            <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
+            <Search className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
