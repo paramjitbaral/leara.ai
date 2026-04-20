@@ -34,6 +34,10 @@ export default function App() {
   const { isAuthReady } = useFirebase();
 
   useEffect(() => {
+    console.log('App State Check - User:', user ? user.email : 'NULL', 'Ready:', isAuthReady);
+  }, [user, isAuthReady]);
+
+  useEffect(() => {
     if (theme === 'light') {
       document.documentElement.classList.add('light');
       document.body.classList.add('light');
