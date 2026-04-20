@@ -382,8 +382,9 @@ export function FileExplorer() {
                 } else {
                   toast.error('No cloud backups found for this project');
                 }
-              } catch (e) {
-                toast.error('Restore failed');
+              } catch (err: any) {
+                console.error('RESTORE ERROR:', err);
+                toast.error(`Restore failed: ${err.message || 'Unknown error'}`);
               } finally {
                 setLoading(false);
               }
