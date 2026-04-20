@@ -207,9 +207,48 @@ export default function App() {
 
   if (!isAuthReady) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#1e1e1e] text-white">
-        <Loader2 className="w-12 h-12 animate-spin text-emerald-500 mb-4" />
-        <p className="text-sm font-medium animate-pulse">Initializing AI Workspace...</p>
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-[#fafafa]">
+        {/* Soft Ambient Depth */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.03)_0%,transparent_70%)]" />
+        
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
+          className="relative flex flex-col items-center"
+        >
+          {/* Suble Light Glow */}
+          <div className="absolute inset-0 bg-emerald-500/5 rounded-full blur-[40px] animate-pulse" />
+          
+          <img 
+            src="/logo.png" 
+            className="w-20 h-20 object-contain relative z-10" 
+            alt="Leara.ai" 
+          />
+          
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.8 }}
+            className="mt-8 flex flex-col items-center gap-4"
+          >
+            <p className="text-zinc-400 text-[11px] font-semibold uppercase tracking-[0.6em] ml-[0.6em]">
+              Initializing Workspace
+            </p>
+            
+            {/* Ultra-Light Progress Loader */}
+            <div className="w-32 h-[1px] bg-zinc-200 overflow-hidden relative">
+              <motion.div 
+                className="absolute inset-0 bg-emerald-500/30"
+                animate={{ x: ['-100%', '100%'] }}
+                transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+              />
+            </div>
+          </motion.div>
+        </motion.div>
+
+        {/* Global Texture */}
+        <div className="absolute inset-0 opacity-[0.02] pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
       </div>
     );
   }
@@ -223,13 +262,17 @@ export default function App() {
           transition={{ duration: 0.5 }}
           className="max-w-sm w-full space-y-12"
         >
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-black shadow-lg shadow-emerald-500/10">
-              <Zap className="w-7 h-7 fill-current" />
-            </div>
+          <div className="flex flex-col items-center gap-6">
+            <img 
+              src="/logo.png" 
+              className="w-20 h-20 object-contain drop-shadow-2xl" 
+              alt="Leara.ai" 
+            />
             <div className="text-center space-y-1">
-              <h1 className="text-4xl font-display font-medium tracking-tight text-white">Leara<span className="text-emerald-500">.ai</span></h1>
-              <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.3em]">Intelligent Workspace</p>
+              <h1 className="text-4xl font-bold tracking-tighter text-white">
+                <span className="text-sky-500">Leara</span><span className="text-emerald-500">.ai</span>
+              </h1>
+              <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.3em]">Professional AI Workspace</p>
             </div>
           </div>
 

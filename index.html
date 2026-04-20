@@ -5,6 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Leara.ai</title>
+  <link rel="icon" type="image/png" href="/favicon.png" />
 </head>
 
 <body class="light">
@@ -22,10 +23,10 @@
     body.light #initial-loader {
       background-color: #ffffff;
     }
-    .loader-bolt {
-      width: 48px;
-      height: 48px;
-      color: #10b981;
+    .loader-logo {
+      width: 64px;
+      height: 64px;
+      object-fit: contain;
       animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
     .loader-text {
@@ -48,9 +49,7 @@
   </style>
   <div id="root">
     <div id="initial-loader">
-      <svg class="loader-bolt" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-      </svg>
+      <img src="/logo.png" class="loader-logo" alt="Leara.ai" />
       <div class="loader-text">Leara.ai</div>
     </div>
   </div>

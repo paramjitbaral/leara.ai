@@ -340,14 +340,12 @@ export const Dashboard: React.FC = () => {
       )}>
         {/* Header - Fixed */}
         <div className="p-6 flex items-center gap-3 shrink-0">
-          <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
-            <Zap className="w-6 h-6" />
-          </div>
+          <img src="/logo.png" alt="Leara.ai" className="w-10 h-10 object-contain" />
           <h1 className={cn(
-            "hidden lg:block text-xl font-display tracking-tight",
+            "hidden lg:block text-xl font-bold tracking-tighter",
             theme === 'dark' ? "text-white" : "text-zinc-900"
           )}>
-            Leara<span className="text-emerald-500">.ai</span>
+            <span className="text-sky-500">Leara</span><span className="text-emerald-500">.ai</span>
           </h1>
         </div>
 
