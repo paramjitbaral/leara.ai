@@ -248,11 +248,10 @@ app.post("/api/github/import", async (req, res) => {
 
       const fileTree = await getFileTree(targetPath, repoName);
       res.json({ success: true, folder: repoName, fileTree });
+    } catch (err: any) {
+      console.error("GLOBAL IMPORT ERROR:", err);
+      res.status(500).json({ error: "Import system failure", details: err.message });
     }
-  } catch (err: any) {
-    console.error("GLOBAL IMPORT ERROR:", err);
-    res.status(500).json({ error: "Import system failure", details: err.message });
-  }
 });
 
 import OpenAI from "openai";
