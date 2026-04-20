@@ -268,7 +268,7 @@ export function FileExplorer() {
                           className="bg-[#1e1e1e] border border-emerald-500 rounded px-1.5 py-0.5 text-xs w-full outline-none text-white"
                         />
                       ) : (
-                        <span className="truncate text-sm">{node.name}</span>
+                        <span className="truncate text-sm">{node.name || 'Unnamed'}</span>
                       )}
                     </div>
                     {!isRenaming && (

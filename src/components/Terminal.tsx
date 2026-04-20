@@ -249,11 +249,13 @@ export function Terminal({ onClose }: TerminalProps) {
           <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/5">
             <button
               onClick={() => setTerminalType('server')}
+              disabled={window.location.hostname.includes('vercel.app')}
               className={cn(
                 "flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-semibold transition-all uppercase tracking-tight",
                 terminalType === 'server' 
                   ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" 
-                  : "text-zinc-500 hover:text-zinc-300"
+                  : "text-zinc-500 hover:text-zinc-300",
+                window.location.hostname.includes('vercel.app') && "hidden"
               )}
             >
               <Server className="w-3 h-3" />

@@ -147,7 +147,7 @@ export const useStore = create<AppState>((set) => ({
   sidebarPosition: 'left',
   setSidebarPosition: (position) => set({ sidebarPosition: position }),
 
-  terminalType: 'server',
+  terminalType: typeof window !== 'undefined' && window.location.hostname.includes('vercel.app') ? 'browser' : 'server',
   setTerminalType: (type) => set({ terminalType: type }),
 
   isPreviewOpen: false,
