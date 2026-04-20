@@ -27,7 +27,18 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setIsAuthReady(true); // Still set to ready so we don't hang, but show error
     });
 
-    return () => unsubscribe();
+    // Failsafe: If auth hasn't responded in 10 seconds, it's likely a config error
+    const failsafe = setTimeout(() => {
+      if (!isAuthReady) {
+        console.warn('Auth system timed out. Please check your network or Firebase configuration.');
+        setIsAuthReady(true);
+      }
+    }, 10000);
+
+    return () => {
+      unsubscribe();
+      clearTimeout(failsafe);
+    };
   }, [setUser]);
 
   return (
