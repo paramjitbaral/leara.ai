@@ -10,10 +10,15 @@ import { spawn } from "child_process";
 import http from "http";
 
 dotenv.config();
+import os from "os";
 
 const app = express();
 const PORT = 3000;
-const WORKSPACE_ROOT = path.join(process.cwd(), "workspace");
+
+// On Vercel, we must use /tmp for any write operations
+const WORKSPACE_ROOT = process.env.VERCEL 
+  ? path.join(os.tmpdir(), "workspace")
+  : path.join(process.cwd(), "workspace");
 
 // Ensure workspace exists
 fs.ensureDirSync(WORKSPACE_ROOT);
