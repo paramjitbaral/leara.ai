@@ -2,8 +2,31 @@
   "version": 2,
   "rewrites": [
     {
+      "source": "/__/auth/(.*)",
+      "destination": "https://ai-studio-applet-webapp-24ad3.firebaseapp.com/__/auth/$1"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "server.ts"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cross-Origin-Embedder-Policy",
+          "value": "require-corp"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
+        }
+      ]
     }
   ]
 }

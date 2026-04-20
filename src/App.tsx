@@ -283,7 +283,7 @@ export default function App() {
           <div className="space-y-6">
             <div className="flex flex-col items-center gap-3">
               <button 
-                onClick={() => handleSignIn(false)}
+                onClick={() => handleSignIn(true)}
                 disabled={isSigningIn}
                 className="w-full flex items-center justify-center gap-3 py-4 bg-white text-black hover:bg-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-bold text-[11px] uppercase tracking-widest transition-all shadow-sm active:scale-[0.98]"
               >
