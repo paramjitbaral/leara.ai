@@ -25,6 +25,12 @@ fs.ensureDirSync(WORKSPACE_ROOT);
 
 app.use(express.json());
 
+// Logger for debugging Vercel routing
+app.use((req, res, next) => {
+  console.log(`[API REQUEST] ${req.method} ${req.url}`);
+  next();
+});
+
 // --- File System Routes ---
 
 // List files recursively
