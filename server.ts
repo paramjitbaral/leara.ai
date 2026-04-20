@@ -46,9 +46,14 @@ app.get("/api/files", async (req, res) => {
   const getTree = async (dir: string): Promise<any[]> => {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     const nodes = await Promise.all(entries.map(async (entry) => {
+      // Ignore hidden files and system trash
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') return null;
+
       const fullPath = path.join(dir, entry.name);
       const relativePath = path.relative(userPath, fullPath);
       
+      console.log(`[FILE DISCOVERY] Found: ${entry.name}, Type: ${entry.isDirectory() ? 'Dir' : 'File'}, Path: ${relativePath}`);
+
       if (entry.isDirectory()) {
         return {
           id: subPath ? path.join(subPath as string, relativePath) : relativePath,
@@ -69,7 +74,7 @@ app.get("/api/files", async (req, res) => {
 
   try {
     const tree = await getTree(userPath);
-    res.json(tree);
+    res.json(tree.filter(Boolean));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
