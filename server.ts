@@ -215,20 +215,20 @@ app.post("/api/github/import", async (req, res) => {
       const { stdout, stderr } = await execAsync(`git clone --depth 1 "${cleanUrl}" "${targetPath}"`, {
         env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
         cwd: userPath,
-        timeout: 60000 // 1 minute timeout
+        timeout: 25000 // Increase to 25 seconds (Vercel limit is 10-30s depending on plan)
       });
       
-      console.log(`Successfully imported ${cleanUrl}`);
+      console.log(`[GIT CLONE SUCCESS] ${cleanUrl}`);
 
-      // Fetch the file tree for the newly imported repo
       const getFileTree = async (dir: string, base: string = ""): Promise<any[]> => {
         const entries = await fs.readdir(dir, { withFileTypes: true });
         const nodes = await Promise.all(entries.map(async (entry) => {
           const relativePath = path.join(base, entry.name);
           const fullPath = path.join(dir, entry.name);
           
+          if (entry.name.startsWith('.') || entry.name === 'node_modules') return null;
+
           if (entry.isDirectory()) {
-            if (entry.name === ".git" || entry.name === "node_modules") return null;
             return {
               id: relativePath,
               name: entry.name,
@@ -236,14 +236,10 @@ app.post("/api/github/import", async (req, res) => {
               children: await getFileTree(fullPath, relativePath)
             };
           } else {
-            // Do not read file content during import to avoid massive JSON payloads
-            // and memory out-of-bounds errors on large repositories. The editor fetching
-            // the file content will load it from disk locally instead.
             return {
               id: relativePath,
               name: entry.name,
-              type: "file",
-              content: ""
+              type: "file"
             };
           }
         }));
@@ -252,32 +248,10 @@ app.post("/api/github/import", async (req, res) => {
 
       const fileTree = await getFileTree(targetPath, repoName);
       res.json({ success: true, folder: repoName, fileTree });
-    } catch (cloneErr: any) {
-      console.error('Git clone failed:', cloneErr.message);
-      console.error('Git stderr:', cloneErr.stderr);
-      
-      let userFriendlyError = "Failed to clone repository";
-      const stderr = cloneErr.stderr || "";
-      
-      if (stderr.includes("Authentication failed") || stderr.includes("could not read from remote repository")) {
-        userFriendlyError = "Authentication failed. Please ensure the repository is public.";
-      } else if (stderr.includes("not found")) {
-        userFriendlyError = "Repository not found. Please check the URL.";
-      } else if (cloneErr.code === 'ETIMEDOUT') {
-        userFriendlyError = "Clone timed out. The repository might be too large.";
-      }
-
-      res.status(500).json({ 
-        error: userFriendlyError,
-        details: stderr || cloneErr.message
-      });
     }
   } catch (err: any) {
-    console.error("GitHub Import Error Details:", err);
-    res.status(500).json({ 
-      error: "Internal server error during import",
-      details: err.message
-    });
+    console.error("GLOBAL IMPORT ERROR:", err);
+    res.status(500).json({ error: "Import system failure", details: err.message });
   }
 });
 

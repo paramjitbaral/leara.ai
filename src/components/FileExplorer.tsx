@@ -204,6 +204,9 @@ export function FileExplorer() {
             </div>
             <input 
               autoFocus
+              id={`new-${creating.type}`}
+              name="newName"
+              aria-label={`New ${creating.type} name`}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => {
@@ -257,6 +260,9 @@ export function FileExplorer() {
                       {isRenaming ? (
                         <input
                           autoFocus
+                          id={`rename-${node.id}`}
+                          name="renameValue"
+                          aria-label={`Rename ${node.name}`}
                           value={renameValue}
                           onChange={(e) => setRenameValue(e.target.value)}
                           onKeyDown={(e) => {

@@ -442,7 +442,7 @@ export const Dashboard: React.FC = () => {
           <div className="flex items-center gap-3 px-3 py-2.5 bg-white/5 rounded-2xl border border-white/5 mt-2 mb-1">
             <div className="w-8 h-8 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
               {user?.photoURL ? (
-                <img src={user.photoURL} alt="User" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                <img src={user.photoURL} alt="User Profile" className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />
               ) : (
                 <User className="w-4 h-4 text-zinc-500" />
               )}
@@ -493,8 +493,11 @@ export const Dashboard: React.FC = () => {
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             <div className="relative group">
+              <label htmlFor="search-projects" className="sr-only">Search projects</label>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-500 transition-colors" />
               <input 
+                id="search-projects"
+                name="search"
                 type="text" 
                 placeholder="Search projects..." 
                 value={searchQuery}
@@ -944,8 +947,10 @@ export const Dashboard: React.FC = () => {
             
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-xs font-medium text-zinc-500 ml-1">Project Name</label>
+                <label htmlFor="project-name" className="text-xs font-medium text-zinc-500 ml-1">Project Name</label>
                 <input 
+                  id="project-name"
+                  name="projectName"
                   type="text"
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
@@ -959,8 +964,10 @@ export const Dashboard: React.FC = () => {
               </div>
               
               <div className="space-y-2">
-                <label className="text-xs font-medium text-zinc-500 ml-1">Description (Optional)</label>
+                <label htmlFor="project-desc" className="text-xs font-medium text-zinc-500 ml-1">Description (Optional)</label>
                 <textarea 
+                  id="project-desc"
+                  name="projectDesc"
                   value={newProjectDesc}
                   onChange={(e) => setNewProjectDesc(e.target.value)}
                   placeholder="What are you building?"
@@ -1019,10 +1026,12 @@ export const Dashboard: React.FC = () => {
             
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-xs font-medium text-zinc-500 ml-1">GitHub Repository URL</label>
+                <label htmlFor="github-url" className="text-xs font-medium text-zinc-500 ml-1">GitHub Repository URL</label>
                 <div className="relative">
                   <Github className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                   <input 
+                    id="github-url"
+                    name="githubUrl"
                     type="text"
                     value={githubUrl}
                     onChange={(e) => setGithubUrl(e.target.value)}
