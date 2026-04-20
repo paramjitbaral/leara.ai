@@ -191,7 +191,7 @@ export function FileExplorer() {
 
   const renderTree = (nodes: FileNode[], depth = 0, parentId = '') => {
     const sortedNodes = [...nodes].sort((a, b) => {
-      if (a.type === b.type) return a.name.localeCompare(b.name);
+      if (a.type === b.type) return (a.name || '').localeCompare(b.name || '');
       return a.type === 'directory' ? -1 : 1;
     });
 
