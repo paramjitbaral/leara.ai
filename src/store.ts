@@ -96,6 +96,9 @@ interface AppState {
 
   sidebarTab: 'explorer' | 'search';
   setSidebarTab: (tab: 'explorer' | 'search') => void;
+
+  editorScrollLine: number | null;
+  setEditorScrollLine: (line: number | null) => void;
 }
 
 const getInitialTheme = (): 'dark' | 'light' => {
@@ -215,4 +218,7 @@ export const useStore = create<AppState>((set) => ({
 
   sidebarTab: 'explorer',
   setSidebarTab: (tab) => set({ sidebarTab: tab }),
+
+  editorScrollLine: null,
+  setEditorScrollLine: (line) => set({ editorScrollLine: line }),
 }));

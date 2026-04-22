@@ -9,7 +9,7 @@ import { storageService } from '../lib/storageService';
 import { editor } from 'monaco-editor';
 
 export function Editor() {
-  const { activeFile, setActiveFile, userId, theme, activeProject, editorHighlightQuery, setEditorHighlightQuery } = useStore();
+  const { activeFile, setActiveFile, userId, theme, activeProject, editorHighlightQuery, setEditorHighlightQuery, editorScrollLine, setEditorScrollLine } = useStore();
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<string[]>([]);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -38,13 +38,25 @@ export function Editor() {
 
     decorationsRef.current = ed.deltaDecorations(decorationsRef.current, newDecorations);
 
-    if (matches.length > 0) {
+    if (editorScrollLine) {
+      // Find the specific match on this line, otherwise just scroll to the line
+      const specificMatch = matches.find(m => m.range.startLineNumber === editorScrollLine);
+      if (specificMatch) {
+         ed.revealRangeInCenter(specificMatch.range, editor.ScrollType.Smooth);
+         ed.setPosition({ lineNumber: editorScrollLine, column: specificMatch.range.startColumn });
+      } else {
+         ed.revealLineInCenter(editorScrollLine, editor.ScrollType.Smooth);
+         ed.setPosition({ lineNumber: editorScrollLine, column: 1 });
+      }
+      ed.focus();
+    } else if (matches.length > 0) {
       ed.revealRangeInCenterIfOutsideViewport(matches[0].range, editor.ScrollType.Smooth);
     }
-  }, [editorHighlightQuery, activeFile?.id]);
+  }, [editorHighlightQuery, activeFile?.id, editorScrollLine]);
 
   const clearHighlight = () => {
     if (editorHighlightQuery) setEditorHighlightQuery('');
+    if (editorScrollLine) setEditorScrollLine(null);
   };
 
   const handleSave = useCallback(async (content: string) => {
