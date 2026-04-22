@@ -56,11 +56,20 @@
     @apply text-[#cccccc] font-sans transition-colors duration-300;
   }
 
-  /* Global transition for smoother theme switching */
-  *, *::before, *::after {
+  /* Global transition for smoother theme switching - optimized */
+  .theme-transition {
     transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 300ms;
+  }
+
+  button, a, [role="button"], .btn-tactile {
+    @apply active:scale-90 active:opacity-80 transition-all duration-75 cursor-pointer select-none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:active, a:active {
+    transform: translateY(1px);
   }
 
   body.light {
@@ -482,4 +491,27 @@ body.light .prose-invert pre code {
 }
 .prose-invert p {
   @apply my-2 leading-relaxed;
+}
+
+/* Monaco Search Highlights */
+.search-highlight-bg {
+  background-color: rgba(16, 185, 129, 0.25);
+  border-bottom: 2px solid rgba(16, 185, 129, 0.6);
+  border-radius: 1px;
+}
+
+body.light .search-highlight-bg {
+  background-color: rgba(16, 185, 129, 0.15);
+  border-bottom: 2px solid rgba(16, 185, 129, 0.8);
+}
+
+.search-highlight {
+  color: #ffffff !important;
+  font-weight: bold;
+  text-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+body.light .search-highlight {
+  color: #064e3b !important;
+  text-shadow: none;
 }

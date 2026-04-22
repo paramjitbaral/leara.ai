@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useStore, FileNode } from '../store';
-import { Folder, FolderOpen, File, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, Edit2, MoreVertical, Github, Loader2, Search, LayoutDashboard, RefreshCw } from 'lucide-react';
+import { Folder, FolderOpen, File, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, Edit2, MoreVertical, Github, Loader2, Search, LayoutDashboard, RefreshCw, X } from 'lucide-react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import { cn } from '../lib/utils';
 import axios from 'axios';
@@ -11,7 +11,7 @@ import { localStore } from '../lib/storage';
 import { storageService } from '../lib/storageService';
 
 export function FileExplorer() {
-  const { userId, files, setFiles, setActiveFile, activeFile, setCurrentView, activeProject } = useStore();
+  const { userId, files, setFiles, setActiveFile, activeFile, setCurrentView, activeProject, theme, setEditorHighlightQuery, setSidebarTab } = useStore();
   const [loading, setLoading] = useState(false);
   const [githubUrl, setGithubUrl] = useState('');
   const [isImporting, setIsImporting] = useState(false);
@@ -46,30 +46,32 @@ export function FileExplorer() {
         }
 
         // 2. Fallback to Firestore (Cloud Backup)
-        console.log('Local storage empty, attempting restore from Firestore...');
-        const filesRef = collection(db, 'projects', activeProject.id, 'files');
-        const snapshot = await getDocs(filesRef);
-        
-        if (!snapshot.empty) {
-          const backupFiles = snapshot.docs.map(doc => doc.data());
-          await axios.post('/api/files/sync', { 
-            userId, 
-            files: backupFiles.map(f => ({ path: f.path, content: f.content, type: f.type })) 
-          });
+        if (db) {
+          console.log('Local storage empty, attempting restore from Firestore...');
+          const filesRef = collection(db, 'projects', activeProject.id, 'files');
+          const snapshot = await getDocs(filesRef);
           
-          // Also save to local storage for next time
-          for (const f of backupFiles) {
-            await localStore.saveFile(activeProject.id, {
-              path: f.path,
-              content: f.content,
-              type: f.type,
-              updatedAt: Date.now()
+          if (!snapshot.empty) {
+            const backupFiles = snapshot.docs.map(doc => doc.data());
+            await axios.post('/api/files/sync', { 
+              userId, 
+              files: backupFiles.map(f => ({ path: f.path, content: f.content, type: f.type })) 
             });
-          }
+            
+            // Also save to local storage for next time
+            for (const f of backupFiles) {
+              await localStore.saveFile(activeProject.id, {
+                path: f.path,
+                content: f.content,
+                type: f.type,
+                updatedAt: Date.now()
+              });
+            }
 
-          const retryRes = await axios.get(`/api/files?userId=${userId}${pathParam}`);
-          setFiles(retryRes.data);
-          return;
+            const retryRes = await axios.get(`/api/files?userId=${userId}${pathParam}`);
+            setFiles(retryRes.data);
+            return;
+          }
         }
       }
       
@@ -189,6 +191,28 @@ export function FileExplorer() {
     }
   };
 
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const getFlatMatches = (nodes: FileNode[]): { node: FileNode, path: string }[] => {
+    let matches: { node: FileNode, path: string }[] = [];
+    const walk = (items: FileNode[], currentPath = '') => {
+      items.forEach(item => {
+        const fullPath = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+        if (item.type === 'file' && fullPath) {
+          matches.push({ node: item, path: currentPath });
+        }
+        if (item.type === 'directory' && item.children) {
+          walk(item.children, currentPath ? `${currentPath}/${item.name}` : item.name);
+        }
+      });
+    };
+    walk(nodes);
+    return matches;
+  };
+
+  const searchResults = getFlatMatches(files);
+
   const renderTree = (nodes: FileNode[], depth = 0, parentId = '') => {
     const sortedNodes = [...nodes].sort((a, b) => {
       if (a.type === b.type) return (a.name || '').localeCompare(b.name || '');
@@ -229,8 +253,9 @@ export function FileExplorer() {
               <ContextMenu.Root>
                 <ContextMenu.Trigger>
                   <div 
+                    role="button"
                     className={cn(
-                      "flex items-center gap-2 px-2 py-1.5 hover:bg-[#2a2d2e] cursor-pointer transition-colors group rounded-md mx-1",
+                      "flex items-center gap-2 px-2 py-1.5 hover:bg-[#2a2d2e] cursor-pointer transition-all active:scale-[0.98] group rounded-md mx-1",
                       isActive ? "bg-[#37373d] text-white" : "text-zinc-400"
                     )}
                     onClick={() => node.type === 'directory' ? toggleExpand(node.id) : openFile(node)}
@@ -343,109 +368,163 @@ export function FileExplorer() {
   return (
     <div className="flex flex-col h-full bg-[#1e1e1e] text-[#cccccc] select-none">
       <div className="h-10 flex items-center justify-between px-4 border-b border-white/5 bg-[#1e1e1e]">
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => setCurrentView('dashboard')}
-            className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white"
-            title="Go to Dashboard"
-          >
-            <LayoutDashboard className="w-3.5 h-3.5" />
-          </button>
-          <div className="w-px h-3 bg-white/10 mx-1" />
-          <span className="font-bold uppercase text-[10px] tracking-wider text-zinc-400">Explorer</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button 
-            onClick={() => setCreating({ type: 'file', parent: activeProject?.folderName || '' })} 
-            className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white" 
-            title="New File"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-          <button 
-            onClick={() => setCreating({ type: 'directory', parent: activeProject?.folderName || '' })} 
-            className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white" 
-            title="New Folder"
-          >
-            <FolderPlus className="w-3.5 h-3.5" />
-          </button>
-          <button 
-            onClick={async () => {
-              if (!activeProject || !userId) return;
-              setLoading(true);
-              toast.info('Restoring files from cloud...');
-              try {
-                const filesRef = collection(db, 'projects', activeProject.id, 'files');
-                const snapshot = await getDocs(filesRef);
-                if (!snapshot.empty) {
-                  const backupFiles = snapshot.docs.map(doc => doc.data());
-                  await axios.post('/api/files/sync', { 
-                    userId, 
-                    files: backupFiles.map(f => ({ path: f.path, content: f.content, type: f.type })) 
-                  });
-                  fetchFiles();
-                  toast.success('Restored from cloud');
-                } else {
-                  toast.error('No cloud backups found for this project');
+        {isSearching ? (
+          <div className="flex-1 flex items-center gap-2">
+            <Search className="w-3 h-3 text-emerald-500" />
+            <input 
+              autoFocus
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setIsSearching(false);
+                  setSearchQuery('');
                 }
-              } catch (err: any) {
-                console.error('RESTORE ERROR:', err);
-                toast.error(`Restore failed: ${err.message || 'Unknown error'}`);
-              } finally {
-                setLoading(false);
-              }
-            }} 
-            className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white" 
-            title="Restore from Cloud"
-          >
-            <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
-          </button>
-          <button 
-            onClick={() => fetchFiles()} 
-            className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white" 
-            title="Refresh"
-          >
-            <Search className="w-3.5 h-3.5" />
-          </button>
-        </div>
+              }}
+              placeholder="Filter files..."
+              className="bg-transparent border-none outline-none text-[10px] w-full font-bold uppercase tracking-wider text-white placeholder:text-zinc-700"
+            />
+            <button 
+              onClick={() => {
+                setIsSearching(false);
+                setSearchQuery('');
+              }}
+              className="p-1 hover:bg-white/5 rounded text-zinc-600 hover:text-white"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 group">
+              <button 
+                onClick={() => setCurrentView('dashboard')}
+                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white"
+                title="Go to Dashboard"
+              >
+                <LayoutDashboard className="w-3.5 h-3.5" />
+              </button>
+              <div className="w-px h-3 bg-white/10 mx-1" />
+              <span className="font-bold uppercase text-[10px] tracking-wider text-zinc-400">Explorer</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button 
+                onClick={() => setCreating({ type: 'file', parent: activeProject?.folderName || '' })} 
+                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white" 
+                title="New File"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+              <button 
+                onClick={() => setCreating({ type: 'directory', parent: activeProject?.folderName || '' })} 
+                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white" 
+                title="New Folder"
+              >
+                <FolderPlus className="w-3.5 h-3.5" />
+              </button>
+              <button 
+                onClick={() => setSidebarTab('search')} 
+                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white" 
+                title="Search Workspace"
+              >
+                <Search className="w-3.5 h-3.5" />
+              </button>
+              <button 
+                onClick={() => fetchFiles()} 
+                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white" 
+                title="Refresh"
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto py-2">
-        {activeProject ? (
-          <div className="mx-1">
-            <div 
-              className={cn(
-                "flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 cursor-pointer transition-colors group rounded-md",
-                projectExpanded ? "text-white" : "text-zinc-500"
-              )}
-              onClick={() => setProjectExpanded(!projectExpanded)}
-            >
-              <div className="w-4 flex justify-center">
-                {projectExpanded ? (
-                  <ChevronDown className="w-3.5 h-3.5 text-zinc-600" />
-                ) : (
-                  <ChevronRight className="w-3.5 h-3.5 text-zinc-600" />
-                )}
-              </div>
-              {projectExpanded ? (
-                <FolderOpen className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
-              ) : (
-                <Folder className="w-3.5 h-3.5 shrink-0 text-emerald-500/50" />
-              )}
-              <span className="truncate flex-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400 group-hover:text-white">
-                {activeProject.name}
-              </span>
-            </div>
-            {projectExpanded && (
-              <div className="mt-0.5">
-                {renderTree(files, 1, activeProject.folderName)}
+      <div className="flex-1 overflow-y-auto py-1">
+        {searchQuery ? (
+          <div className="space-y-0">
+            {searchResults.length > 0 ? (
+              searchResults.map((res, idx) => (
+                <div 
+                  key={idx}
+                  onClick={() => {
+                    openFile(res.node);
+                    setEditorHighlightQuery(searchQuery);
+                    setIsSearching(false);
+                    setSearchQuery('');
+                  }}
+                  className={cn(
+                    "flex flex-col px-4 py-2 hover:bg-emerald-500/5 cursor-pointer transition-all border-l-2 border-transparent hover:border-emerald-500 group",
+                    theme === 'dark' ? "hover:bg-white/5" : "hover:bg-zinc-100"
+                  )}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <File className={cn("w-3 h-3 shrink-0", theme === 'dark' ? "text-emerald-500/70" : "text-emerald-600")} />
+                    <span className={cn(
+                      "text-[11px] font-bold truncate group-hover:text-emerald-500 transition-colors tracking-tight",
+                      theme === 'dark' ? "text-zinc-300" : "text-zinc-800"
+                    )}>
+                      {res.node.name}
+                    </span>
+                  </div>
+                  {res.path && (
+                    <div className="flex items-center gap-1 mt-0.5 ml-5.5 opacity-40">
+                      <span className={cn(
+                        "text-[8px] font-medium uppercase tracking-[0.15em] truncate",
+                        theme === 'dark' ? "text-zinc-500" : "text-zinc-500"
+                      )}>
+                        {res.path.replace(/\//g, ' › ')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-12 text-center">
+                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-[0.3em]">No matching files</p>
               </div>
             )}
           </div>
         ) : (
-          <div className="mx-1">
-            {renderTree(files)}
-          </div>
+          <>
+            {activeProject ? (
+              <div className="mx-1">
+                <div 
+                  className={cn(
+                    "flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 cursor-pointer transition-colors group rounded-md",
+                    projectExpanded ? "text-white" : "text-zinc-500"
+                  )}
+                  onClick={() => setProjectExpanded(!projectExpanded)}
+                >
+                  <div className="w-4 flex justify-center">
+                    {projectExpanded ? (
+                      <ChevronDown className="w-3.5 h-3.5 text-zinc-600" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 text-zinc-600" />
+                    )}
+                  </div>
+                  {projectExpanded ? (
+                    <FolderOpen className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+                  ) : (
+                    <Folder className="w-3.5 h-3.5 shrink-0 text-emerald-500/50" />
+                  )}
+                  <span className="truncate flex-1 text-[10px] font-black uppercase tracking-wider text-zinc-400 group-hover:text-white">
+                    {activeProject.name}
+                  </span>
+                </div>
+                {projectExpanded && (
+                  <div className="mt-0.5">
+                    {renderTree(files, 1, activeProject.folderName)}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="mx-1">
+                {renderTree(files)}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

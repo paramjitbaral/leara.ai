@@ -9,9 +9,43 @@ import { storageService } from '../lib/storageService';
 import { editor } from 'monaco-editor';
 
 export function Editor() {
-  const { activeFile, setActiveFile, userId, theme, activeProject } = useStore();
+  const { activeFile, setActiveFile, userId, theme, activeProject, editorHighlightQuery, setEditorHighlightQuery } = useStore();
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const decorationsRef = useRef<string[]>([]);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!editorRef.current || !editorHighlightQuery) {
+      if (editorRef.current) {
+        decorationsRef.current = editorRef.current.deltaDecorations(decorationsRef.current, []);
+      }
+      return;
+    }
+
+    const ed = editorRef.current;
+    const model = ed.getModel();
+    if (!model) return;
+
+    const matches = model.findMatches(editorHighlightQuery, false, false, false, null, true);
+    const newDecorations: editor.IModelDeltaDecoration[] = matches.map(match => ({
+      range: match.range,
+      options: {
+        inlineClassName: 'search-highlight',
+        isWholeLine: false,
+        className: 'search-highlight-bg'
+      }
+    }));
+
+    decorationsRef.current = ed.deltaDecorations(decorationsRef.current, newDecorations);
+
+    if (matches.length > 0) {
+      ed.revealRangeInCenterIfOutsideViewport(matches[0].range, editor.ScrollType.Smooth);
+    }
+  }, [editorHighlightQuery, activeFile?.id]);
+
+  const clearHighlight = () => {
+    if (editorHighlightQuery) setEditorHighlightQuery('');
+  };
 
   const handleSave = useCallback(async (content: string) => {
     if (!activeFile || !userId || !activeProject) return;
@@ -46,6 +80,7 @@ export function Editor() {
     
     // Update local state immediately
     setActiveFile({ ...activeFile, content: newContent });
+    clearHighlight();
 
     // Debounced auto-save
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -56,6 +91,9 @@ export function Editor() {
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+
+    editor.onMouseDown(() => clearHighlight());
+    editor.onKeyDown(() => clearHighlight());
 
     // Add Context Menu Actions
     editor.addAction({

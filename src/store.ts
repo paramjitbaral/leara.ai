@@ -38,8 +38,14 @@ interface AppState {
   userApiKey: string | null;
   setUserApiKey: (key: string | null) => void;
   
-  aiProvider: 'gemini' | 'openai' | 'ollama';
-  setAiProvider: (provider: 'gemini' | 'openai' | 'ollama') => void;
+  providerKeys: Record<string, string>;
+  setProviderKey: (provider: string, key: string) => void;
+  
+  aiProvider: 'gemini' | 'openai' | 'ollama' | 'custom';
+  setAiProvider: (provider: 'gemini' | 'openai' | 'ollama' | 'custom') => void;
+  
+  aiEndpoint: string;
+  setAiEndpoint: (endpoint: string) => void;
   
   isLearningModalOpen: boolean;
   setIsLearningModalOpen: (open: boolean) => void;
@@ -84,6 +90,12 @@ interface AppState {
 
   theme: 'dark' | 'light';
   setTheme: (theme: 'dark' | 'light') => void;
+
+  editorHighlightQuery: string;
+  setEditorHighlightQuery: (query: string) => void;
+
+  sidebarTab: 'explorer' | 'search';
+  setSidebarTab: (tab: 'explorer' | 'search') => void;
 }
 
 const getInitialTheme = (): 'dark' | 'light' => {
@@ -117,11 +129,35 @@ export const useStore = create<AppState>((set) => ({
   currentUsage: 0,
   setUsage: (usage) => set({ currentUsage: usage }),
   
-  userApiKey: null,
-  setUserApiKey: (key) => set({ userApiKey: key }),
-  
-  aiProvider: 'gemini',
-  setAiProvider: (provider) => set({ aiProvider: provider }),
+  userApiKey: localStorage.getItem('ai-api-key') || null,
+  setUserApiKey: (key) => {
+    if (key) localStorage.setItem('ai-api-key', key);
+    else localStorage.removeItem('ai-api-key');
+    set({ userApiKey: key });
+  },
+
+  providerKeys: JSON.parse(localStorage.getItem('ai-provider-keys') || '{}'),
+  setProviderKey: (provider, key) => set((state) => {
+    const newKeys = { ...state.providerKeys, [provider]: key };
+    localStorage.setItem('ai-provider-keys', JSON.stringify(newKeys));
+    return { providerKeys: newKeys };
+  }),
+
+  aiProvider: (localStorage.getItem('ai-provider') as any) || 'gemini',
+  setAiProvider: (provider) => {
+    localStorage.setItem('ai-provider', provider);
+    set((state) => ({ 
+      aiProvider: provider,
+      // Automatically switch userApiKey when provider changes
+      userApiKey: state.providerKeys[provider] || null
+    }));
+  },
+
+  aiEndpoint: localStorage.getItem('ai-endpoint') || '',
+  setAiEndpoint: (endpoint) => {
+    localStorage.setItem('ai-endpoint', endpoint);
+    set({ aiEndpoint: endpoint });
+  },
 
   isLearningModalOpen: false,
   setIsLearningModalOpen: (open) => set({ isLearningModalOpen: open }),
@@ -129,8 +165,11 @@ export const useStore = create<AppState>((set) => ({
   isLearningActive: false,
   setIsLearningActive: (active) => set({ isLearningActive: active }),
 
-  aiModel: 'gemini-3.1-flash-preview',
-  setAiModel: (model) => set({ aiModel: model }),
+  aiModel: localStorage.getItem('ai-model') || 'gemini-3.1-flash-preview',
+  setAiModel: (model) => {
+    localStorage.setItem('ai-model', model);
+    set({ aiModel: model });
+  },
 
   isApiKeyModalOpen: false,
   setIsApiKeyModalOpen: (open) => set({ isApiKeyModalOpen: open }),
@@ -170,4 +209,10 @@ export const useStore = create<AppState>((set) => ({
     localStorage.setItem('app-theme', theme);
     set({ theme });
   },
+
+  editorHighlightQuery: '',
+  setEditorHighlightQuery: (query) => set({ editorHighlightQuery: query }),
+
+  sidebarTab: 'explorer',
+  setSidebarTab: (tab) => set({ sidebarTab: tab }),
 }));

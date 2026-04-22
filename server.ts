@@ -8,26 +8,27 @@ import dotenv from "dotenv";
 import { WebSocketServer } from "ws";
 import { spawn } from "child_process";
 import http from "http";
+import os from "os";
+import OpenAI from "openai";
 
 dotenv.config();
-import os from "os";
 
 const app = express();
 const PORT = 3000;
 
-// On Vercel, we must use /tmp for any write operations
-const WORKSPACE_ROOT = process.env.VERCEL 
-  ? path.join(os.tmpdir(), "workspace")
-  : path.join(process.cwd(), "workspace");
+// Desktop-focused workspace: always use local directory
+const WORKSPACE_ROOT = path.join(process.cwd(), "workspace");
 
 // Ensure workspace exists
 fs.ensureDirSync(WORKSPACE_ROOT);
 
 app.use(express.json());
 
-// Logger for debugging Vercel routing
+// API Request Logger
 app.use((req, res, next) => {
-  console.log(`[API REQUEST] ${req.method} ${req.url}`);
+  if (req.url.startsWith('/api')) {
+    console.log(`[API] ${req.method} ${req.url}`);
+  }
   next();
 });
 
@@ -36,51 +37,57 @@ app.use((req, res, next) => {
 // List files recursively
 app.get("/api/files", async (req, res) => {
   const { userId, path: subPath } = req.query;
-  if (!userId) return res.status(400).json({ error: "User ID required" });
+  const uid = (userId as string) || "local-user";
   
-  const userPath = path.join(WORKSPACE_ROOT, userId as string, (subPath as string) || "");
+  const userPath = path.join(WORKSPACE_ROOT, uid, (subPath as string) || "");
   
   // Create starter files if workspace is new
-  if (!(await fs.pathExists(userPath))) {
-    await fs.ensureDir(userPath);
-    if (!subPath) {
-      await fs.writeFile(path.join(userPath, "welcome.md"), "# Welcome to AI Code Mentor!\n\nThis is your personal learning workspace. Use the **Copilot** on the right to explain code, fix bugs, or build new features.\n\n### Getting Started\n1. Select a file from the explorer.\n2. Ask the AI to explain it.\n3. Try the **Practice** mode to test your knowledge.");
-      await fs.writeFile(path.join(userPath, "hello_world.js"), "console.log('Hello, AI Learner!');\n\n// Try asking the AI to 'Explain this code' in the Copilot panel.");
+  const hasUserPath = await fs.pathExists(userPath);
+  if (!hasUserPath) {
+    try {
+      await fs.ensureDir(userPath);
+      if (!subPath) {
+        await fs.writeFile(path.join(userPath, "welcome.md"), "# Welcome to Leara Desktop!\n\nThis is your local development workspace. Since you're running the desktop version, you have full access to your local file system via this workspace folder.\n\n### Local Features\n- **Real Terminal**: Use PowerShell, CMD, or Bash directly.\n- **Direct FS**: Fast file operations.\n- **Privacy**: Your code stays on your machine.");
+        await fs.writeFile(path.join(userPath, "hello.js"), "console.log('Hello from Leara Desktop!');");
+      }
+    } catch (e) {
+      console.warn(`[FS] Could not create starter files for ${userPath}:`, e);
     }
   }
 
   const getTree = async (dir: string): Promise<any[]> => {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    const nodes = await Promise.all(entries.map(async (entry) => {
-      // Ignore hidden files and system trash
-      if (entry.name.startsWith('.') || entry.name === 'node_modules') return null;
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      const nodes = await Promise.all(entries.map(async (entry) => {
+        if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === 'dist') return null;
 
-      const fullPath = path.join(dir, entry.name);
-      const relativePath = path.relative(userPath, fullPath);
-      
-      console.log(`[FILE DISCOVERY] Found: ${entry.name}, Type: ${entry.isDirectory() ? 'Dir' : 'File'}, Path: ${relativePath}`);
-
-      if (entry.isDirectory()) {
+        const fullPath = path.join(dir, entry.name);
+        const relativePath = path.relative(path.join(WORKSPACE_ROOT, uid), fullPath);
+        
+        if (entry.isDirectory()) {
+          return {
+            id: relativePath,
+            name: entry.name,
+            type: "directory",
+            children: await getTree(fullPath)
+          };
+        }
         return {
-          id: subPath ? path.join(subPath as string, relativePath) : relativePath,
+          id: relativePath,
           name: entry.name,
-          type: "directory",
-          children: await getTree(fullPath)
+          type: "file",
+          path: relativePath
         };
-      }
-      return {
-        id: subPath ? path.join(subPath as string, relativePath) : relativePath,
-        name: entry.name,
-        type: "file",
-        path: subPath ? path.join(subPath as string, relativePath) : relativePath
-      };
-    }));
-    return nodes;
+      }));
+      return nodes.filter(Boolean);
+    } catch (err) {
+      return [];
+    }
   };
 
   try {
     const tree = await getTree(userPath);
-    res.json(tree.filter(Boolean));
+    res.json(tree);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -89,9 +96,10 @@ app.get("/api/files", async (req, res) => {
 // Read file
 app.get("/api/files/content", async (req, res) => {
   const { userId, path: filePath } = req.query;
-  if (!userId || !filePath) return res.status(400).json({ error: "User ID and Path required" });
+  const uid = (userId as string) || "local-user";
+  if (!filePath) return res.status(400).json({ error: "Path required" });
 
-  const fullPath = path.join(WORKSPACE_ROOT, userId as string, filePath as string);
+  const fullPath = path.join(WORKSPACE_ROOT, uid, filePath as string);
   try {
     const content = await fs.readFile(fullPath, "utf-8");
     res.json({ content });
@@ -103,12 +111,14 @@ app.get("/api/files/content", async (req, res) => {
 // Create file/dir
 app.post("/api/files/create", async (req, res) => {
   const { userId, path: targetPath, type, name } = req.body;
-  const fullPath = path.join(WORKSPACE_ROOT, userId, targetPath || "", name);
+  const uid = userId || "local-user";
+  const fullPath = path.join(WORKSPACE_ROOT, uid, targetPath || "", name);
   
   try {
     if (type === "directory") {
       await fs.ensureDir(fullPath);
     } else {
+      await fs.ensureDir(path.dirname(fullPath));
       await fs.writeFile(fullPath, "");
     }
     res.json({ success: true });
@@ -120,7 +130,8 @@ app.post("/api/files/create", async (req, res) => {
 // Save file
 app.post("/api/files/save", async (req, res) => {
   const { userId, path: filePath, content } = req.body;
-  const fullPath = path.join(WORKSPACE_ROOT, userId, filePath);
+  const uid = userId || "local-user";
+  const fullPath = path.join(WORKSPACE_ROOT, uid, filePath);
   
   try {
     await fs.writeFile(fullPath, content);
@@ -133,7 +144,8 @@ app.post("/api/files/save", async (req, res) => {
 // Delete
 app.delete("/api/files/delete", async (req, res) => {
   const { userId, path: targetPath } = req.query;
-  const fullPath = path.join(WORKSPACE_ROOT, userId as string, targetPath as string);
+  const uid = (userId as string) || "local-user";
+  const fullPath = path.join(WORKSPACE_ROOT, uid, targetPath as string);
   
   try {
     await fs.remove(fullPath);
@@ -146,9 +158,9 @@ app.delete("/api/files/delete", async (req, res) => {
 // Rename
 app.put("/api/files/rename", async (req, res) => {
   const { userId, oldPath, newPath } = req.body;
-  const oldFullPath = path.join(WORKSPACE_ROOT, userId, oldPath);
-  const newFullPath = path.join(WORKSPACE_ROOT, userId, newPath);
-  
+  const uid = userId || "local-user";
+  const oldFullPath = path.join(WORKSPACE_ROOT, uid, oldPath);
+  const newFullPath = path.join(WORKSPACE_ROOT, uid, newPath);
   try {
     await fs.move(oldFullPath, newFullPath);
     res.json({ success: true });
@@ -157,20 +169,106 @@ app.put("/api/files/rename", async (req, res) => {
   }
 });
 
-// Sync (Restore)
-app.post("/api/files/sync", async (req, res) => {
-  const { userId, files } = req.body; // files is an array of { path: string, content: string, type: 'file' | 'directory' }
-  if (!userId || !Array.isArray(files)) return res.status(400).json({ error: "userId and files array required" });
+// Deep Content Search
+app.post("/api/search/content", async (req, res) => {
+  const { userId, query, options, path: subPath } = req.body;
+  const uid = userId || "local-user";
+  const userPath = path.join(WORKSPACE_ROOT, uid, subPath || "");
+  const { caseSensitive, wholeWord, regex } = options || {};
+
+  if (!query) return res.json([]);
+
+  const results: any[] = [];
+  const walk = async (dir: string) => {
+    if (!fs.existsSync(dir)) return;
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if ((entry.name.startsWith('.') && entry.name !== '.env') || entry.name === 'node_modules' || entry.name === 'dist' || entry.name === '__pycache__') continue;
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(fullPath);
+      } else {
+        // Skip common binary files and compiled items
+        if (/\.(pyc|exe|dll|so|o|a|bin|obj|png|jpg|jpeg|gif|ico|pdf|zip|gz|7z)$/i.test(entry.name)) continue;
+
+        try {
+          const content = await fs.readFile(fullPath, "utf-8");
+          // Heuristic: check for null bytes to identify binary content
+          if (content.includes('\0')) continue;
+
+          const lines = content.split('\n');
+          const fileMatches: any[] = [];
+          
+          let searchPattern: RegExp;
+          try {
+            if (regex) {
+              searchPattern = new RegExp(query, caseSensitive ? 'g' : 'gi');
+            } else {
+              let escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              if (wholeWord) escaped = `\\b${escaped}\\b`;
+              searchPattern = new RegExp(escaped, caseSensitive ? 'g' : 'gi');
+            }
+          } catch (reErr) {
+            continue; // Invalid regex, skip
+          }
+
+          lines.forEach((line, index) => {
+            // Reset regex state for each line if using global
+            searchPattern.lastIndex = 0;
+            if (searchPattern.test(line)) {
+              fileMatches.push({
+                line: index + 1,
+                content: line.trim().substring(0, 500) // Truncate very long lines
+              });
+            }
+          });
+
+          if (fileMatches.length > 0) {
+            results.push({
+              file: path.relative(userPath, fullPath).replace(/\\/g, '/'),
+              matches: fileMatches
+            });
+          }
+        } catch (e) {}
+      }
+    }
+  };
 
   try {
-    for (const file of files) {
-      const fullPath = path.join(WORKSPACE_ROOT, userId, file.path);
-      if (file.type === "directory") {
-        await fs.ensureDir(fullPath);
+    await walk(userPath);
+    res.json(results);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Global Content Replace
+app.post("/api/replace/content", async (req, res) => {
+  const { userId, query, replace, options, files, path: subPath } = req.body;
+  const uid = userId || "local-user";
+  const userPath = path.join(WORKSPACE_ROOT, uid, subPath || "");
+  const { caseSensitive, wholeWord, regex } = options || {};
+
+  if (!query || !files || !Array.isArray(files)) return res.status(400).json({ error: "Invalid parameters" });
+
+  try {
+    for (const fileRelPath of files) {
+      const fullPath = path.join(userPath, fileRelPath);
+      if (!(await fs.pathExists(fullPath))) continue;
+
+      let content = await fs.readFile(fullPath, "utf-8");
+      let searchPattern: RegExp;
+      
+      if (regex) {
+        searchPattern = new RegExp(query, caseSensitive ? 'g' : 'gi');
       } else {
-        await fs.ensureDir(path.dirname(fullPath));
-        await fs.writeFile(fullPath, file.content || "");
+        let escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (wholeWord) escaped = `\\b${escaped}\\b`;
+        searchPattern = new RegExp(escaped, caseSensitive ? 'g' : 'gi');
       }
+
+      const newContent = content.replace(searchPattern, replace || '');
+      await fs.writeFile(fullPath, newContent);
     }
     res.json({ success: true });
   } catch (err: any) {
@@ -181,26 +279,18 @@ app.post("/api/files/sync", async (req, res) => {
 // --- GitHub Import ---
 app.post("/api/github/import", async (req, res) => {
   const { userId, repoUrl } = req.body;
+  const uid = userId || "local-user";
   
-  if (!userId || !repoUrl) {
-    return res.status(400).json({ error: "userId and repoUrl are required" });
-  }
+  if (!repoUrl) return res.status(400).json({ error: "repoUrl is required" });
 
-  // Clean up repoUrl and extract repoName
   const cleanUrl = repoUrl.trim().replace(/\/$/, "");
   const repoName = cleanUrl.split("/").pop()?.replace(".git", "") || "repo";
-  
-  const userPath = path.join(WORKSPACE_ROOT, userId);
+  const userPath = path.join(WORKSPACE_ROOT, uid);
   const targetPath = path.join(userPath, repoName);
-
-  console.log(`Importing repo: ${cleanUrl} for user: ${userId} into ${targetPath}`);
 
   try {
     await fs.ensureDir(userPath);
-    
-    // If directory exists, remove it first to allow a clean clone
     if (await fs.pathExists(targetPath)) {
-      console.log(`Directory ${targetPath} already exists, removing for clean clone...`);
       await fs.remove(targetPath);
     }
 
@@ -208,78 +298,51 @@ app.post("/api/github/import", async (req, res) => {
     const { promisify } = await import('util');
     const execAsync = promisify(exec);
 
-    // Use --depth 1 for faster clones
-    // GIT_TERMINAL_PROMPT=0 prevents hanging on private repos
-    console.log(`Executing: git clone --depth 1 "${cleanUrl}" "${targetPath}"`);
-    const { stdout, stderr } = await execAsync(`git clone --depth 1 "${cleanUrl}" "${targetPath}"`, {
+    console.log(`[DESKTOP] Cloning: ${cleanUrl} -> ${targetPath}`);
+    await execAsync(`git clone --depth 1 "${cleanUrl}" "${targetPath}"`, {
       env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-      cwd: userPath,
-      timeout: 25000 // Increase to 25 seconds (Vercel limit is 10-30s depending on plan)
+      timeout: 60000 
     });
     
-    console.log(`[GIT CLONE SUCCESS] ${cleanUrl}`);
-
-    const getFileTree = async (dir: string, base: string = ""): Promise<any[]> => {
-      const entries = await fs.readdir(dir, { withFileTypes: true });
-      const nodes = await Promise.all(entries.map(async (entry) => {
-        const relativePath = path.join(base, entry.name);
-        const fullPath = path.join(dir, entry.name);
-        
-        if (entry.name.startsWith('.') || entry.name === 'node_modules') return null;
-
-        if (entry.isDirectory()) {
-          return {
-            id: relativePath,
-            name: entry.name,
-            type: "directory",
-            children: await getFileTree(fullPath, relativePath)
-          };
-        } else {
-          return {
-            id: relativePath,
-            name: entry.name,
-            type: "file"
-          };
-        }
-      }));
-      return nodes.filter(Boolean);
-    };
-
-    const fileTree = await getFileTree(targetPath, repoName);
-    res.json({ success: true, folder: repoName, fileTree });
+    res.json({ success: true, folder: repoName });
   } catch (err: any) {
-    console.error("GLOBAL IMPORT ERROR:", err);
-    res.status(500).json({ error: "Import system failure", details: err.message });
+    console.error("Github Import Error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-import OpenAI from "openai";
-
 // --- AI Copilot Proxy ---
 app.post("/api/ai/copilot", async (req, res) => {
-  const { prompt, context, provider, apiKey, systemInstruction } = req.body;
+  const { prompt, context, provider, apiKey, model, endpoint, systemInstruction } = req.body;
   
+  console.log(`[AI] request via ${provider} (${model || 'default model'})`);
+
   try {
     if (provider === "ollama") {
       const response = await axios.post("http://localhost:11434/api/generate", {
-        model: "codellama",
+        model: model || "codellama",
         prompt: `Context: ${JSON.stringify(context)}\n\nQuery: ${prompt}`,
         system: systemInstruction,
         stream: false
-      }).catch(() => {
-        throw new Error("Ollama not running locally. Please ensure Ollama is active on port 11434.");
       });
       return res.json({ response: response.data.response });
     }
 
-    if (provider === "openai") {
-      const key = apiKey || process.env.OPENAI_API_KEY;
-      if (!key) {
-        throw new Error("OpenAI API Key is missing.");
+    if (provider === "openai" || provider === "custom") {
+      const key = apiKey || (provider === "openai" ? process.env.OPENAI_API_KEY : '');
+      if (!key && provider === "openai") throw new Error("OpenAI API Key is missing.");
+      
+      const openaiConfig: any = { 
+        apiKey: key || 'no-key-required'
+      };
+      
+      if (provider === "custom" && endpoint) {
+        openaiConfig.baseURL = endpoint;
       }
-      const openai = new OpenAI({ apiKey: key });
+      
+      const openai = new OpenAI(openaiConfig);
       const completion = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: model || (provider === "openai" ? "gpt-4-turbo-preview" : "gpt-3.5-turbo"),
         messages: [
           { role: "system", content: systemInstruction || "You are a helpful coding assistant." },
           { role: "user", content: `Context: ${JSON.stringify(context)}\n\nQuery: ${prompt}` }
@@ -288,106 +351,88 @@ app.post("/api/ai/copilot", async (req, res) => {
       return res.json({ response: completion.choices[0].message.content });
     }
 
-    // Default fallback or Gemini (though Gemini is usually called from frontend)
-    res.json({ response: "AI Provider not supported or configured on backend." });
+    if (provider === "gemini") {
+      const key = apiKey || process.env.GEMINI_API_KEY;
+      if (!key) throw new Error("Gemini API Key is missing.");
+      
+      const geminiModel = model || "gemini-1.5-flash";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${key}`;
+      
+      const response = await axios.post(apiUrl, {
+        contents: [{ 
+          parts: [{ 
+            text: `${systemInstruction || "You are a helpful coding assistant."}\n\nContext: ${JSON.stringify(context)}\n\nQuery: ${prompt}` 
+          }] 
+        }]
+      });
+      
+      if (!response.data.candidates?.[0]?.content?.parts?.[0]?.text) {
+        console.error("[AI] Gemini error response:", response.data);
+        throw new Error("Invalid response structure from Gemini API");
+      }
+
+      return res.json({ response: response.data.candidates[0].content.parts[0].text });
+    }
+
+    res.json({ response: `AI Provider '${provider}' not supported on backend.` });
   } catch (err: any) {
-    console.error("AI Proxy Error:", err);
-    res.status(500).json({ error: err.message });
+    const errorMessage = err.response?.data?.error?.message || err.message;
+    console.error(`[AI] Error (${provider}):`, errorMessage);
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-// --- Vite Integration ---
+// --- Terminal Integration ---
 async function startServer() {
   const server = http.createServer(app);
   const wss = new WebSocketServer({ noServer: true });
 
   wss.on("connection", (ws, request) => {
     const url = new URL(request.url || "", `http://${request.headers.host}`);
-    const userId = url.searchParams.get("userId") || "default-user";
+    const userId = url.searchParams.get("userId") || "local-user";
     const folder = url.searchParams.get("folder");
     const userRoot = path.join(WORKSPACE_ROOT, userId);
     const userPath = folder ? path.join(userRoot, folder) : userRoot;
     
-    fs.ensureDirSync(userRoot);
-    if (folder) fs.ensureDirSync(userPath);
+    try {
+      if (!fs.existsSync(userPath)) {
+        fs.mkdirSync(userPath, { recursive: true });
+      }
+    } catch (e) {
+      console.warn(`[TERMINAL] mkdir failed (expected if path exists): ${e}`);
+    }
 
-    // Create a custom .bashrc for the user in their root workspace
-    const bashrcPath = path.join(userRoot, ".bashrc");
-    const bashrcContent = `
-export PS1='\\[\\e[32m\\]${userId}@mentor\\[\\e[0m\\]:\\[\\e[34m\\]\\w\\[\\e[0m\\]$ '
-alias ls='ls --color=auto'
-alias ll='ls -alF'
-alias grep='grep --color=auto'
-echo -e "\\e[32mWelcome to AI Code Mentor Terminal!\\e[0m"
-echo -e "\\e[33mNote: Port 3000 is reserved for this app. To test servers, use other ports.\\e[0m"
-`;
-    fs.writeFileSync(bashrcPath, bashrcContent);
+    const isWindows = process.platform === "win32";
+    const shell = isWindows ? "powershell.exe" : (process.env.SHELL || "bash");
+    const args = isWindows ? ["-NoLogo", "-ExecutionPolicy", "Bypass"] : ["-i"];
 
-    // Try to use python3 to spawn a PTY for a better experience, fallback to bash, then sh
-    const tryPTY = () => {
-      const shellEnv = { 
+    console.log(`[TERMINAL] Spawning ${shell} in ${userPath}`);
+    
+    const shellProcess = spawn(shell, args, {
+      cwd: userPath,
+      env: { 
         ...process.env, 
         HOME: userRoot,
-        TERM: "xterm-256color",
-      };
+        USERPROFILE: userRoot,
+        TERM: "xterm-256color" 
+      },
+      shell: true,
+      stdio: ["pipe", "pipe", "pipe"]
+    });
 
-      const ptyShell = spawn("python3", ["-c", `import pty; pty.spawn(["/bin/bash", "--rcfile", "${bashrcPath}"])`], {
-        cwd: userPath,
-        env: shellEnv,
-        stdio: ["pipe", "pipe", "pipe"]
-      });
+    shellProcess.stdout.on("data", (data) => ws.send(data.toString()));
+    shellProcess.stderr.on("data", (data) => ws.send(data.toString()));
 
-      ptyShell.on("error", (err) => {
-        console.error("Failed to start python3 pty, falling back to bash:", err);
-        const bashShell = spawn("bash", ["-i"], {
-          cwd: userPath,
-          env: shellEnv,
-          stdio: ["pipe", "pipe", "pipe"]
-        });
-        
-        bashShell.on("error", (err) => {
-          console.error("Failed to start bash, falling back to sh:", err);
-          const fallbackShell = spawn("sh", ["-i"], {
-            cwd: userPath,
-            env: shellEnv,
-            stdio: ["pipe", "pipe", "pipe"]
-          });
-          setupShell(fallbackShell);
-        });
+    ws.on("message", (message) => {
+      shellProcess.stdin.write(message.toString());
+    });
 
-        if (bashShell.pid) {
-          setupShell(bashShell);
-        }
-      });
-
-      if (ptyShell.pid) {
-        setupShell(ptyShell);
-      }
-    };
-
-    const setupShell = (s: any) => {
-      s.stdout.on("data", (data: any) => {
-        ws.send(data.toString());
-      });
-
-      s.stderr.on("data", (data: any) => {
-        ws.send(data.toString());
-      });
-
-      ws.on("message", (message) => {
-        s.stdin.write(message.toString());
-      });
-
-      ws.on("close", () => {
-        s.kill();
-      });
-
-      s.on("exit", () => {
-        ws.close();
-      });
-    };
-
-    tryPTY();
+    ws.on("close", () => shellProcess.kill());
+    shellProcess.on("exit", () => ws.close());
+    shellProcess.on("error", (err) => {
+      ws.send(`\r\n\x1b[31mFailed to start shell: ${err.message}\x1b[0m\r\n`);
+      ws.close();
+    });
   });
 
   server.on("upgrade", (request, socket, head) => {
@@ -407,14 +452,22 @@ echo -e "\\e[33mNote: Port 3000 is reserved for this app. To test servers, use o
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    }
   }
 
   server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`
+🚀 Leara Desktop Server Running
+🏠 Workspace: ${WORKSPACE_ROOT}
+🔗 URL: http://localhost:${PORT}
+🆔 Mode: ${process.env.NODE_ENV || 'development'}
+Vite Middleware: ACTIVE
+    `);
   });
 }
 

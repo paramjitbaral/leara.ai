@@ -36,15 +36,17 @@ export function LearningMode({ activeFile, onClose, onOpenSettings }: LearningMo
   const saveProgress = async () => {
     if (!user || !session || !activeFile) return;
     try {
-      await addDoc(collection(db, 'userProgress'), {
-        userId: user.uid,
-        projectId: activeFile.projectId || 'default',
-        projectName: activeFile.projectName || 'Default Project',
-        sessionTitle: session.title,
-        completedAt: serverTimestamp(),
-        stepsCount: session.steps.length,
-        language: activeFile.language || 'javascript'
-      });
+      if (db) {
+        await addDoc(collection(db, 'userProgress'), {
+          userId: user.uid,
+          projectId: activeFile.projectId || 'default',
+          projectName: activeFile.projectName || 'Default Project',
+          sessionTitle: session.title,
+          completedAt: serverTimestamp(),
+          stepsCount: session.steps.length,
+          language: activeFile.language || 'javascript'
+        });
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'userProgress');
     }
@@ -54,6 +56,16 @@ export function LearningMode({ activeFile, onClose, onOpenSettings }: LearningMo
     const initSession = async () => {
       if (!activeFile) return;
       setError(null);
+
+      // 0. Check for API key
+      const { userApiKey, aiProvider, setIsApiKeyModalOpen } = useStore.getState();
+      if (!userApiKey && aiProvider !== 'ollama') {
+        setError('AI Access Key Required. Please connect your API key in settings to start learning.');
+        setIsApiKeyModalOpen(true);
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         // Step 1: Load only the first step immediately

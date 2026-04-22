@@ -25,17 +25,23 @@ export const storageService = {
         updatedAt: Date.now()
       });
 
-      // 3. Cloud
-      const fileId = path.replace(/\//g, '_');
-      const fileRef = doc(db, 'projects', projectId, 'files', fileId);
-      await setDoc(fileRef, {
-        name,
-        content,
-        path,
-        projectId,
-        language: language || '',
-        updatedAt: serverTimestamp()
-      }, { merge: true });
+      // 3. Cloud (Silently handle if unauthenticated or offline)
+      if (db) {
+        try {
+          const fileId = path.replace(/\//g, '_');
+          const fileRef = doc(db, 'projects', projectId, 'files', fileId);
+          await setDoc(fileRef, {
+            name,
+            content,
+            path,
+            projectId,
+            language: language || '',
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (cloudError) {
+          console.warn('Cloud sync skipped:', cloudError);
+        }
+      }
 
       return true;
     } catch (error) {
@@ -62,16 +68,22 @@ export const storageService = {
       });
 
       // 3. Cloud
-      const fileId = fullPath.replace(/\//g, '_');
-      const fileRef = doc(db, 'projects', projectId, 'files', fileId);
-      await setDoc(fileRef, {
-        name,
-        type,
-        path: fullPath,
-        projectId,
-        content: '',
-        updatedAt: serverTimestamp()
-      });
+      if (db) {
+        try {
+          const fileId = fullPath.replace(/\//g, '_');
+          const fileRef = doc(db, 'projects', projectId, 'files', fileId);
+          await setDoc(fileRef, {
+            name,
+            type,
+            path: fullPath,
+            projectId,
+            content: '',
+            updatedAt: serverTimestamp()
+          });
+        } catch (cloudError) {
+          console.warn('Cloud node creation skipped:', cloudError);
+        }
+      }
 
       return fullPath;
     } catch (error) {
@@ -92,8 +104,14 @@ export const storageService = {
       await localStore.deleteFile(projectId, path);
 
       // 3. Cloud
-      const fileId = path.replace(/\//g, '_');
-      await deleteDoc(doc(db, 'projects', projectId, 'files', fileId));
+      if (db) {
+        try {
+          const fileId = path.replace(/\//g, '_');
+          await deleteDoc(doc(db, 'projects', projectId, 'files', fileId));
+        } catch (cloudError) {
+          console.warn('Cloud deletion skipped:', cloudError);
+        }
+      }
 
       return true;
     } catch (error) {
@@ -122,23 +140,29 @@ export const storageService = {
       });
 
       // 3. Cloud
-      const oldFileId = oldPath.replace(/\//g, '_');
-      const newFileId = newPath.replace(/\//g, '_');
-      const oldRef = doc(db, 'projects', projectId, 'files', oldFileId);
-      const newRef = doc(db, 'projects', projectId, 'files', newFileId);
-
-      // Get content from server to ensure we have the latest
-      const res = await axios.get(`/api/files/content?userId=${userId}&path=${newPath}`);
-
-      await setDoc(newRef, {
-        name: newName,
-        path: newPath,
-        projectId,
-        content: res.data.content,
-        type: oldFile?.type || 'file',
-        updatedAt: serverTimestamp()
-      });
-      await deleteDoc(oldRef);
+      if (db) {
+        try {
+          const oldFileId = oldPath.replace(/\//g, '_');
+          const newFileId = newPath.replace(/\//g, '_');
+          const oldRef = doc(db, 'projects', projectId, 'files', oldFileId);
+          const newRef = doc(db, 'projects', projectId, 'files', newFileId);
+  
+          // Get content from server to ensure we have the latest
+          const res = await axios.get(`/api/files/content?userId=${userId}&path=${newPath}`);
+  
+          await setDoc(newRef, {
+            name: newName,
+            path: newPath,
+            projectId,
+            content: res.data.content,
+            type: oldFile?.type || 'file',
+            updatedAt: serverTimestamp()
+          });
+          await deleteDoc(oldRef);
+        } catch (cloudError) {
+          console.warn('Cloud rename skipped:', cloudError);
+        }
+      }
 
       return true;
     } catch (error) {
@@ -153,7 +177,11 @@ export const storageService = {
   async deleteProject(userId: string, projectId: string, folderName: string) {
     try {
       // 1. Firestore
-      await deleteDoc(doc(db, 'projects', projectId));
+      try {
+        await deleteDoc(doc(db, 'projects', projectId));
+      } catch (cloudError) {
+        console.warn('Cloud project deletion skipped:', cloudError);
+      }
 
       // 2. Server
       await axios.delete(`/api/files/delete?userId=${userId}&path=${folderName}`);
@@ -172,35 +200,10 @@ export const storageService = {
    * Batch backup multiple nodes (used for project creation/import)
    */
   async batchBackup(projectId: string, nodes: any[]) {
-    let batch = writeBatch(db);
-    let count = 0;
     let localFilesArray: any[] = [];
-
-    // Commit the current batch and create a new one
-    const commitBatchIfNeeded = async () => {
-      if (count >= 400) {
-        await batch.commit();
-        batch = writeBatch(db);
-        count = 0;
-      }
-    };
 
     const processNodes = async (items: any[]) => {
       for (const item of items) {
-        const fileId = item.id.replace(/\//g, '_');
-        const fileRef = doc(db, 'projects', projectId, 'files', fileId);
-
-        // Cloud
-        batch.set(fileRef, {
-          name: item.name,
-          type: item.type,
-          path: item.id,
-          projectId,
-          content: item.content || '',
-          updatedAt: serverTimestamp()
-        });
-        count++;
-
         // Local batching
         localFilesArray.push({
           path: item.id,
@@ -209,8 +212,19 @@ export const storageService = {
           updatedAt: Date.now()
         });
 
-        // Need to check after every increment
-        await commitBatchIfNeeded();
+        // Cloud (Non-blocking)
+        try {
+          const fileId = item.id.replace(/\//g, '_');
+          const fileRef = doc(db, 'projects', projectId, 'files', fileId);
+          await setDoc(fileRef, {
+            name: item.name,
+            type: item.type,
+            path: item.id,
+            projectId,
+            content: item.content || '',
+            updatedAt: serverTimestamp()
+          });
+        } catch (e) {}
 
         if (item.children) {
           await processNodes(item.children);
@@ -220,12 +234,7 @@ export const storageService = {
 
     await processNodes(nodes);
 
-    // Commit any remaining operations
-    if (count > 0) {
-      await batch.commit();
-    }
-
-    // Perform a single batch save to IndexedDB at the end to prevent browser freezes
+    // Perform a single batch save to IndexedDB at the end
     if (localFilesArray.length > 0) {
       await localStore.saveFiles(projectId, localFilesArray);
     }

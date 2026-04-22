@@ -49,15 +49,15 @@ window.addEventListener('unhandledrejection', (e) => {
 });
 
 // Silence console logs in production for security and cleanliness
-if (import.meta.env.PROD) {
+/* if (import.meta.env.PROD) {
   console.log = () => {};
   console.debug = () => {};
   console.info = () => {};
-  // We keep console.warn and console.error slightly more visible or completely silent?
-  // User said "no error or api or anything is seen in console logs" so we silence all.
   console.warn = () => {};
   console.error = () => {};
-}
+} */
+
+console.log("🚀 Leara Desktop: Initializing Main Entry...");
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

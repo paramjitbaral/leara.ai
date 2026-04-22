@@ -13,6 +13,7 @@ import {
   ExternalLink, 
   FolderOpen,
   ChevronRight,
+  ChevronDown,
   PlusCircle,
   History,
   Terminal,
@@ -28,12 +29,18 @@ import {
   Trash2,
   X,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  LogIn,
+  ShieldCheck,
+  Info,
+  Archive,
+  ArchiveRestore
 } from 'lucide-react';
+import { LearaLogo } from './LearaLogo';
 import { useStore } from '../store';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
-import { db, logOut, handleFirestoreError, OperationType } from '../firebase';
+import { db, logOut, signIn, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { localStore } from '../lib/storage';
 import { storageService } from '../lib/storageService';
@@ -44,7 +51,7 @@ import { toast } from 'sonner';
 
 const ProjectSkeleton: React.FC<{ theme: 'dark' | 'light' }> = ({ theme }) => (
   <div className={cn(
-    "border rounded-2xl p-4 flex items-center gap-6 animate-pulse",
+    "border rounded-xl p-4 flex items-center gap-6 animate-pulse",
     theme === 'dark' ? "bg-white/5 border-white/5" : "bg-white border-zinc-100 shadow-sm"
   )}>
     <div className={cn("w-12 h-12 rounded-xl shrink-0", theme === 'dark' ? "bg-white/5" : "bg-zinc-100")} />
@@ -61,7 +68,7 @@ const ProjectSkeleton: React.FC<{ theme: 'dark' | 'light' }> = ({ theme }) => (
 
 const StatSkeleton: React.FC<{ theme: 'dark' | 'light' }> = ({ theme }) => (
   <div className={cn(
-    "border rounded-3xl p-6 animate-pulse",
+    "border rounded-2xl p-6 animate-pulse",
     theme === 'dark' ? "bg-[#111] border-white/5" : "bg-white border-zinc-100 shadow-sm"
   )}>
     <div className={cn("w-10 h-10 rounded-xl mb-4", theme === 'dark' ? "bg-white/5" : "bg-zinc-100")} />
@@ -98,6 +105,7 @@ export const Dashboard: React.FC = () => {
   const [githubUrl, setGithubUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
+  const [projectSubFilter, setProjectSubFilter] = useState<'all' | 'archived'>('all');
 
   const handleProjectClick = (project: any) => {
     setActiveProject(project);
@@ -105,22 +113,53 @@ export const Dashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!user) return;
+    const fetchProjects = async () => {
+      if (!user) return;
 
-    const q = query(collection(db, 'projects'), where('ownerId', '==', user.uid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const projectsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setProjects(projectsData);
-      setIsLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'projects');
-      setIsLoading(false);
-    });
+      // Local Mode: Fetch projects from server filesystem
+      if (user.uid === 'local-desktop-user' || !db) {
+        try {
+          const res = await axios.get(`/api/files?userId=${user.uid}`);
+          // On the server, /api/files returns the tree. 
+          // For the dashboard, we just want the top-level directories as projects.
+          setProjects(res.data.map((p: any) => ({
+            id: p.name,
+            name: p.name,
+            folderName: p.name,
+            updatedAt: { toDate: () => new Date() },
+            isStarred: false
+          })));
+          setIsLoading(false);
+        } catch (error) {
+          console.error('Failed to fetch local projects:', error);
+          setIsLoading(false);
+        }
+        return;
+      }
 
-    return () => unsubscribe();
+      // Cloud Mode: Fetch projects from Firestore
+      try {
+        const q = query(collection(db, 'projects'), where('ownerId', '==', user.uid));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const projectsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setProjects(projectsData);
+          setIsLoading(false);
+        }, (error) => {
+          handleFirestoreError(error, OperationType.GET, 'projects');
+          setIsLoading(false);
+        });
+
+        return () => unsubscribe();
+      } catch (e) {
+        console.error('Firestore subscription failed:', e);
+        setIsLoading(false);
+      }
+    };
+
+    fetchProjects();
   }, [user]);
 
   const backupFilesToFirestore = async (projectId: string, files: any[]) => {
@@ -128,7 +167,7 @@ export const Dashboard: React.FC = () => {
       await storageService.batchBackup(projectId, files);
     } catch (error) {
       console.error('Failed to backup files:', error);
-      toast.error('Cloud backup failed, but project is available locally.');
+      toast.error('Sync failed, but project is available locally.');
     }
   };
 
@@ -160,34 +199,35 @@ export const Dashboard: React.FC = () => {
         content: readmeContent
       });
 
-      // 3. Add to Firestore
-      let projectId = '';
-      try {
-        const docRef = await addDoc(collection(db, 'projects'), {
-          name: newProjectName,
-          description: newProjectDesc || 'A fresh new coding environment',
-          folderName: folderName,
-          template: 'React',
-          status: 'Active',
-          ownerId: user.uid,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          isStarred: false,
-          user: {
-            name: user.displayName,
-            avatar: user.photoURL || `https://picsum.photos/seed/${user.uid}/32/32`
-          }
-        });
-        projectId = docRef.id;
-        
-        // 4. Backup starter files to Firestore
-        await backupFilesToFirestore(projectId, [
-          { id: folderName, name: folderName, type: 'directory' },
-          { id: readmePath, name: 'README.md', type: 'file', content: readmeContent }
-        ]);
-
-      } catch (err) {
-        handleFirestoreError(err, OperationType.CREATE, 'projects');
+      // 3. Add to Firestore (Optional Cloud registration)
+      let projectId = folderName;
+      if (user.uid !== 'local-desktop-user' && db) {
+        try {
+          const docRef = await addDoc(collection(db, 'projects'), {
+            name: newProjectName,
+            description: newProjectDesc || 'A fresh new coding environment',
+            folderName: folderName,
+            template: 'React',
+            status: 'Active',
+            ownerId: user.uid,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            isStarred: false,
+            user: {
+              name: user.displayName,
+              avatar: user.photoURL || `https://picsum.photos/seed/${user.uid}/32/32`
+            }
+          });
+          projectId = docRef.id;
+          
+          // 4. Backup starter files to Firestore
+          await backupFilesToFirestore(projectId, [
+            { id: folderName, name: folderName, type: 'directory' },
+            { id: readmePath, name: 'README.md', type: 'file', content: readmeContent }
+          ]);
+        } catch (err) {
+          console.warn('Firestore project registration skipped:', err);
+        }
       }
 
       toast.success('Project created successfully!');
@@ -226,46 +266,56 @@ export const Dashboard: React.FC = () => {
 
       let newProject: any = null;
 
-      try {
-        const docRef = await addDoc(collection(db, 'projects'), {
-          name: repoName,
-          description: `Imported from ${githubUrl}`,
-          folderName: repoName,
-          template: 'GitHub',
-          status: 'Active',
-          ownerId: user.uid,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          isStarred: false,
-          user: {
-            name: user.displayName,
-            avatar: user.photoURL || `https://picsum.photos/seed/${user.uid}/32/32`
+      // 3. Add to Firestore (Optional Cloud registration)
+      if (user.uid !== 'local-desktop-user' && db) {
+        try {
+          const docRef = await addDoc(collection(db, 'projects'), {
+            name: repoName,
+            description: `Imported from ${githubUrl}`,
+            folderName: repoName,
+            template: 'GitHub',
+            status: 'Active',
+            ownerId: user.uid,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            isStarred: false,
+            user: {
+              name: user.displayName,
+              avatar: user.photoURL || `https://picsum.photos/seed/${user.uid}/32/32`
+            }
+          });
+          
+          const projectId = docRef.id;
+          newProject = {
+            id: projectId,
+            name: repoName,
+            description: `Imported from ${githubUrl}`,
+            folderName: repoName,
+            template: 'GitHub',
+            status: 'Active',
+            ownerId: user.uid,
+            user: {
+              name: user.displayName,
+              avatar: user.photoURL || `https://picsum.photos/seed/${user.uid}/32/32`
+            }
+          };
+          
+          // Backup all imported files to Firestore
+          if (fileTree) {
+            toast.info('Indexing files...', { duration: 5000 });
+            await backupFilesToFirestore(projectId, fileTree);
           }
-        });
-        
-        const projectId = docRef.id;
-        newProject = {
-          id: projectId,
-          name: repoName,
-          description: `Imported from ${githubUrl}`,
-          folderName: repoName,
-          template: 'GitHub',
-          status: 'Active',
-          ownerId: user.uid,
-          user: {
-            name: user.displayName,
-            avatar: user.photoURL || `https://picsum.photos/seed/${user.uid}/32/32`
-          }
-        };
-        
-        // Backup all imported files to Firestore
-        if (fileTree) {
-          toast.info('Backing up files to cloud...', { duration: 5000 });
-          await backupFilesToFirestore(projectId, fileTree);
+        } catch (err) {
+          console.warn('Firestore import registration skipped:', err);
         }
-
-      } catch (err) {
-        handleFirestoreError(err, OperationType.CREATE, 'projects');
+      } else {
+        // Local only newProject for redirection
+        newProject = {
+          id: repoName,
+          name: repoName,
+          folderName: repoName,
+          ownerId: user.uid
+        };
       }
 
       setImportProgress(100);
@@ -310,6 +360,7 @@ export const Dashboard: React.FC = () => {
   };
 
   const toggleStar = async (projectId: string, currentStarred: boolean) => {
+    if (!db) return;
     try {
       await updateDoc(doc(db, 'projects', projectId), {
         isStarred: !currentStarred
@@ -319,14 +370,50 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const filteredProjects = projects.filter(p => {
-    const matchesSearch = p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         p.description?.toLowerCase().includes(searchQuery.toLowerCase());
+  const toggleArchive = async (projectId: string, currentStatus: string) => {
+    if (!user) return;
     
-    if (activeTab === 'favorites') return matchesSearch && p.isStarred;
-    if (activeTab === 'projects') return matchesSearch;
-    return matchesSearch;
-  });
+    const newStatus = currentStatus === 'Archived' ? 'Active' : 'Archived';
+    
+    // Cloud Mode
+    if (user.uid !== 'local-desktop-user' && db) {
+      try {
+        await updateDoc(doc(db, 'projects', projectId), {
+          status: newStatus,
+          updatedAt: serverTimestamp()
+        });
+        toast.success(newStatus === 'Archived' ? 'Project archived' : 'Project restored');
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, `projects/${projectId}`);
+      }
+      return;
+    }
+
+    // Local Mode: Fallback to local state if no DB
+    setProjects(prev => prev.map(p => 
+      p.id === projectId ? { ...p, status: newStatus } : p
+    ));
+    toast.success(newStatus === 'Archived' ? 'Project archived' : 'Project restored');
+  };
+
+  const filteredProjects = projects
+    .filter(p => {
+      const matchesSearch = p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           p.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const isArchived = p.status === 'Archived';
+      
+      if (activeTab === 'favorites') return matchesSearch && p.isStarred;
+      if (projectSubFilter === 'archived') return matchesSearch && isArchived;
+      if (projectSubFilter === 'all') return matchesSearch && !isArchived;
+      
+      return matchesSearch;
+    })
+    .sort((a, b) => {
+      const timeA = a.updatedAt?.seconds || a.updatedAt?.toDate?.()?.getTime() || 0;
+      const timeB = b.updatedAt?.seconds || b.updatedAt?.toDate?.()?.getTime() || 0;
+      return timeB - timeA;
+    });
 
   return (
     <div className={cn(
@@ -339,14 +426,8 @@ export const Dashboard: React.FC = () => {
         theme === 'dark' ? "bg-[#0a0a0a] border-white/5" : "bg-white border-zinc-100"
       )}>
         {/* Header - Fixed */}
-        <div className="p-6 flex items-center gap-3 shrink-0">
-          <img src="/logo.png" alt="Leara.ai" className="w-10 h-10 object-contain" />
-          <h1 className={cn(
-            "hidden lg:block text-xl font-bold tracking-tighter",
-            theme === 'dark' ? "text-white" : "text-zinc-900"
-          )}>
-            <span className="text-sky-500">Leara</span><span className="text-emerald-500">.ai</span>
-          </h1>
+        <div className="p-6 cursor-pointer" onClick={() => setActiveTab('home')}>
+          <LearaLogo size="md" />
         </div>
 
         <nav className="flex-1 px-4 space-y-4 mt-4 flex flex-col min-h-0 overflow-hidden">
@@ -402,17 +483,20 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent px-3 space-y-3 pb-4">
               {projects.length > 0 ? (
-                projects.map(project => (
-                  <div key={project.id} className="flex items-start gap-3 group/activity transition-all hover:translate-x-0.5">
-                    <div className="w-1 h-8 bg-zinc-800 group-hover/activity:bg-emerald-500 rounded-full mt-1 transition-colors shrink-0" />
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-[11px] text-zinc-300 truncate font-medium group-hover/activity:text-emerald-400 transition-colors">Updated {project.name}</span>
-                      <span className="text-[9px] text-zinc-600">
-                        {project.updatedAt?.toDate ? project.updatedAt.toDate().toLocaleTimeString() : 'Just now'}
-                      </span>
+                [...projects]
+                  .sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0))
+                  .slice(0, 8)
+                  .map(project => (
+                    <div key={project.id} className="flex items-start gap-3 group/activity transition-all hover:translate-x-0.5">
+                      <div className="w-1 h-8 bg-zinc-800 group-hover/activity:bg-emerald-500 rounded-full mt-1 transition-colors shrink-0" />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[11px] text-zinc-300 truncate font-medium group-hover/activity:text-emerald-400 transition-colors">Updated {project.name}</span>
+                        <span className="text-[9px] text-zinc-600">
+                          {project.updatedAt?.toDate ? project.updatedAt.toDate().toLocaleTimeString() : 'Just now'}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  ))
               ) : (
                 <p className="text-[10px] text-zinc-600 italic">No recent activity</p>
               )}
@@ -433,25 +517,41 @@ export const Dashboard: React.FC = () => {
             <span className="hidden lg:block text-sm font-medium">Settings</span>
           </button>
           <button 
-            onClick={logOut}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all group text-zinc-500 hover:text-red-400 hover:bg-red-500/5"
+            onClick={() => {
+              logOut();
+              if (user?.uid === 'local-desktop-user') {
+                useStore.getState().setUser(null);
+                window.location.reload(); 
+              }
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all group text-zinc-500 hover:text-red-400 hover:bg-red-500/5 active:scale-95"
           >
             <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
             <span className="hidden lg:block text-sm font-medium">Logout</span>
           </button>
-          <div className="flex items-center gap-3 px-3 py-2.5 bg-white/5 rounded-2xl border border-white/5 mt-2 mb-1">
-            <div className="w-8 h-8 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
-              {user?.photoURL ? (
-                <img src={user.photoURL} alt="User Profile" className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />
-              ) : (
-                <User className="w-4 h-4 text-zinc-500" />
-              )}
+          {user?.uid === 'local-desktop-user' ? (
+            <button 
+              onClick={() => signIn(false)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black rounded-xl transition-all group shadow-lg shadow-emerald-500/20 active:scale-95"
+            >
+              <LogIn className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <span className="hidden lg:block text-xs font-black uppercase tracking-widest">Sign Up</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-3 px-3 py-2.5 bg-white/5 rounded-xl border border-white/5 mt-2 mb-1">
+              <div className="w-8 h-8 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                {user?.photoURL ? (
+                  <img src={user.photoURL} alt="User Profile" className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />
+                ) : (
+                  <User className="w-4 h-4 text-zinc-500" />
+                )}
+              </div>
+              <div className="hidden lg:flex flex-col min-w-0 pr-4">
+                <span className="text-xs font-bold text-white truncate">{user?.displayName || 'User'}</span>
+                <span className="text-[10px] text-zinc-500 truncate">{user?.email || 'user@example.com'}</span>
+              </div>
             </div>
-            <div className="hidden lg:flex flex-col min-w-0 pr-4">
-              <span className="text-xs font-bold text-white truncate">{user?.displayName || 'User'}</span>
-              <span className="text-[10px] text-zinc-500 truncate">{user?.email || 'user@example.com'}</span>
-            </div>
-          </div>
+          )}
         </div>
       </aside>
 
@@ -475,7 +575,7 @@ export const Dashboard: React.FC = () => {
             </h1>
             <p className="text-xs text-zinc-500">
               {activeTab === 'home' && 'Your personalized coding space'}
-              {activeTab === 'dashboard' && 'Manage your cloud-powered development environments'}
+              {activeTab === 'dashboard' && 'Manage your local development environments'}
               {activeTab === 'projects' && 'Browse and organize your entire codebase'}
               {activeTab === 'favorites' && 'Quick access to your most important work'}
               {activeTab === 'settings' && 'Manage your account and preferences'}
@@ -492,24 +592,7 @@ export const Dashboard: React.FC = () => {
             >
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
-            <div className="relative group">
-              <label htmlFor="search-projects" className="sr-only">Search projects</label>
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-500 transition-colors" />
-              <input 
-                id="search-projects"
-                name="search"
-                type="text" 
-                placeholder="Search projects..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={cn(
-                  "border rounded-full pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-1 w-64 transition-all",
-                  theme === 'dark' 
-                    ? "bg-white/5 border-white/10 text-white focus:border-emerald-500/50 focus:ring-emerald-500/20" 
-                    : "bg-zinc-100 border-transparent text-zinc-900 focus:border-emerald-500/50 focus:ring-emerald-500/20"
-                )}
-              />
-            </div>
+
             <button 
               onClick={() => setIsCreateDialogOpen(true)}
               className={cn(
@@ -540,7 +623,7 @@ export const Dashboard: React.FC = () => {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.1 }}
                         className={cn(
-                          "border rounded-3xl p-6 transition-all",
+                          "border rounded-2xl p-6 transition-all",
                           theme === 'dark' ? "bg-[#111] border-white/5 hover:border-white/10" : "bg-white border-zinc-100 shadow-sm hover:shadow-md"
                         )}
                       >
@@ -561,14 +644,20 @@ export const Dashboard: React.FC = () => {
               </div>
               
               <div className={cn(
-                "p-8 rounded-3xl border",
+                "p-8 rounded-2xl border",
                 theme === 'dark' ? "bg-emerald-500/5 border-emerald-500/20" : "bg-emerald-50 border-emerald-100"
               )}>
                 <h2 className={cn(
                   "text-2xl font-bold",
                   theme === 'dark' ? "text-white" : "text-zinc-900"
-                )}>Welcome back, {user?.displayName?.split(' ')[0] || 'Developer'}!</h2>
-                <p className="text-zinc-500 mt-2">You have {projects.length} active projects and 2 pending invitations.</p>
+                )}>
+                  {user?.uid === 'local-desktop-user' ? 'Welcome to Leara Desktop!' : `Welcome back, ${user?.displayName?.split(' ')[0] || 'Developer'}!`}
+                </h2>
+                <p className="text-zinc-500 mt-2">
+                  {user?.uid === 'local-desktop-user' 
+                    ? 'Working offline with your local files and local AI.' 
+                    : `You have ${projects.length} active projects and 2 pending invitations.`}
+                </p>
                 <button 
                   onClick={() => setActiveTab('dashboard')}
                   className="mt-6 px-6 py-2 bg-emerald-500 text-black font-bold rounded-xl hover:bg-emerald-400 transition-all"
@@ -588,7 +677,7 @@ export const Dashboard: React.FC = () => {
                     whileHover={{ y: -4 }}
                     onClick={() => setIsCreateDialogOpen(true)}
                     className={cn(
-                      "lg:col-span-2 border rounded-3xl p-8 flex flex-col justify-between group cursor-pointer relative overflow-hidden transition-all",
+                      "lg:col-span-2 border rounded-2xl p-8 flex flex-col justify-between group cursor-pointer relative overflow-hidden transition-all",
                       theme === 'dark' ? "bg-emerald-500/5 border-emerald-500/20" : "bg-[#e8fbf3] border-emerald-100"
                     )}
                   >
@@ -596,7 +685,7 @@ export const Dashboard: React.FC = () => {
                       <Code2 className="w-48 h-48 rotate-12" />
                     </div>
                     <div className="space-y-4 relative z-10">
-                      <div className="w-14 h-14 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-emerald-500/30">
+                      <div className="w-14 h-14 bg-emerald-500 rounded-xl flex items-center justify-center text-white shadow-xl shadow-emerald-500/30">
                         <Plus className="w-8 h-8" />
                       </div>
                       <div>
@@ -626,7 +715,7 @@ export const Dashboard: React.FC = () => {
                       whileHover={{ y: -4 }}
                       onClick={() => setIsImportDialogOpen(true)}
                       className={cn(
-                        "border rounded-3xl p-6 flex flex-col justify-between group cursor-pointer transition-all",
+                        "border rounded-2xl p-6 flex flex-col justify-between group cursor-pointer transition-all",
                         theme === 'dark' ? "bg-[#111] border-white/5 hover:border-white/10" : "bg-white border-zinc-100 shadow-sm hover:shadow-md"
                       )}
                     >
@@ -652,7 +741,7 @@ export const Dashboard: React.FC = () => {
                       whileHover={{ y: -4 }}
                       onClick={() => setIsApiKeyModalOpen(true)}
                       className={cn(
-                        "border rounded-3xl p-6 flex flex-col justify-between group cursor-pointer transition-all",
+                        "border rounded-2xl p-6 flex flex-col justify-between group cursor-pointer transition-all",
                         theme === 'dark' ? "bg-[#111] border-white/5 hover:border-white/10" : "bg-white border-zinc-100 shadow-sm hover:shadow-md"
                       )}
                     >
@@ -692,9 +781,20 @@ export const Dashboard: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button className="px-3 py-1.5 text-xs font-bold text-zinc-500 hover:text-white transition-colors">All</button>
-                    <button className="px-3 py-1.5 text-xs font-bold text-emerald-500 bg-emerald-500/10 rounded-lg">Recent</button>
-                    <button className="px-3 py-1.5 text-xs font-bold text-zinc-500 hover:text-white transition-colors">Archived</button>
+                    <button 
+                      onClick={() => setProjectSubFilter('all')}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-bold transition-all rounded-lg",
+                        projectSubFilter === 'all' ? "text-emerald-500 bg-emerald-500/10" : "text-zinc-500 hover:text-white"
+                      )}
+                    >All</button>
+                    <button 
+                      onClick={() => setProjectSubFilter('archived')}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-bold transition-all rounded-lg",
+                        projectSubFilter === 'archived' ? "text-emerald-500 bg-emerald-500/10" : "text-zinc-500 hover:text-white"
+                      )}
+                    >Archived</button>
                   </div>
                 </div>
 
@@ -705,7 +805,7 @@ export const Dashboard: React.FC = () => {
                     </div>
                   ) : filteredProjects.length === 0 ? (
                     <div className={cn(
-                      "text-center py-12 rounded-3xl border border-dashed",
+                      "text-center py-12 rounded-2xl border border-dashed",
                       theme === 'dark' ? "bg-white/5 border-white/10" : "bg-white border-zinc-200"
                     )}>
                       <FolderOpen className="w-12 h-12 text-zinc-400 mx-auto mb-4" />
@@ -717,12 +817,14 @@ export const Dashboard: React.FC = () => {
                     filteredProjects.map((project) => (
                       <motion.div 
                         key={project.id}
+                        role="button"
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         whileHover={{ x: 4 }}
+                        whileTap={{ scale: 0.98 }}
                         onClick={() => handleProjectClick(project)}
                         className={cn(
-                          "group border rounded-2xl p-4 flex items-center gap-6 cursor-pointer transition-all",
+                          "group border rounded-xl p-4 flex items-center gap-6 cursor-pointer transition-all active:scale-[0.98]",
                           theme === 'dark' ? "bg-[#0f0f0f] border-white/5 hover:border-emerald-500/30" : "bg-white border-zinc-100 hover:border-emerald-500/30 hover:shadow-md"
                         )}
                       >
@@ -774,10 +876,24 @@ export const Dashboard: React.FC = () => {
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
+                              toggleArchive(project.id, project.status);
+                            }}
+                            className={cn(
+                              "p-2 rounded-xl transition-all",
+                              project.status === 'Archived' ? "text-amber-500 bg-amber-500/10" : "text-zinc-600 hover:text-white hover:bg-white/5"
+                            )}
+                            title={project.status === 'Archived' ? "Restore project" : "Archive project"}
+                          >
+                            {project.status === 'Archived' ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                          </button>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setProjectToDelete({ id: project.id, folderName: project.folderName });
                               setIsDeleteDialogOpen(true);
                             }}
                             className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-500/5 rounded-xl transition-all"
+                            title="Delete project"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -812,7 +928,7 @@ export const Dashboard: React.FC = () => {
                     theme === 'dark' ? "text-white" : "text-zinc-900"
                   )}>Account Settings</h3>
                   <div className={cn(
-                    "border rounded-3xl p-6 space-y-6",
+                    "border rounded-2xl p-6 space-y-6",
                     theme === 'dark' ? "bg-[#111] border-white/5" : "bg-white border-zinc-100 shadow-sm"
                   )}>
                     <div className="flex items-center justify-between">
@@ -839,7 +955,7 @@ export const Dashboard: React.FC = () => {
                     theme === 'dark' ? "text-white" : "text-zinc-900"
                   )}>Preferences</h3>
                   <div className={cn(
-                    "border rounded-3xl p-6 space-y-4",
+                    "border rounded-2xl p-6 space-y-4",
                     theme === 'dark' ? "bg-[#111] border-white/5" : "bg-white border-zinc-100 shadow-sm"
                   )}>
                     {[
@@ -873,13 +989,13 @@ export const Dashboard: React.FC = () => {
                   theme === 'dark' ? "text-white" : "text-zinc-900"
                 )}>Theme & Appearance</h3>
                 <div className={cn(
-                  "border rounded-3xl p-6 grid grid-cols-1 md:grid-cols-2 gap-4",
+                  "border rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 gap-4",
                   theme === 'dark' ? "bg-[#111] border-white/5" : "bg-white border-zinc-100 shadow-sm"
                 )}>
                   <button 
                     onClick={() => setTheme('dark')}
                     className={cn(
-                      "flex items-center justify-between p-4 rounded-2xl border transition-all",
+                      "flex items-center justify-between p-4 rounded-xl border transition-all",
                       theme === 'dark' ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-400" : "bg-white/5 border-white/10 text-zinc-400 hover:bg-white/10"
                     )}
                   >
@@ -892,7 +1008,7 @@ export const Dashboard: React.FC = () => {
                   <button 
                     onClick={() => setTheme('light')}
                     className={cn(
-                      "flex items-center justify-between p-4 rounded-2xl border transition-all",
+                      "flex items-center justify-between p-4 rounded-xl border transition-all",
                       theme === 'light' ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-400" : "bg-white/5 border-white/10 text-zinc-400 hover:bg-white/10"
                     )}
                   >
@@ -917,23 +1033,26 @@ export const Dashboard: React.FC = () => {
       {/* Create Project Dialog */}
       <Dialog.Root open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] animate-in fade-in duration-300" />
+          <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] animate-in fade-in duration-200" />
           <Dialog.Content className={cn(
-            "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md border rounded-3xl p-8 shadow-2xl z-[101] outline-none animate-in zoom-in-95 duration-200",
-            theme === 'dark' ? "bg-[#0c0c0c] border-white/10" : "bg-white border-zinc-200"
+            "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md border shadow-2xl z-[101] outline-none animate-in zoom-in-95 duration-200 p-8",
+            theme === 'dark' ? "bg-[#0c0c0c] border-white/10 rounded-2xl" : "bg-white border-zinc-200 rounded-2xl"
           )}>
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500">
+                <div className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center text-emerald-500",
+                  theme === 'dark' ? "bg-emerald-500/10" : "bg-emerald-50"
+                )}>
                   <Plus className="w-5 h-5" />
                 </div>
                 <div>
                   <Dialog.Title className={cn(
-                    "text-lg font-semibold tracking-tight",
+                    "text-lg font-bold tracking-tight",
                     theme === 'dark' ? "text-white" : "text-zinc-900"
                   )}>New Project</Dialog.Title>
                   <Dialog.Description className="text-zinc-500 text-xs mt-0.5">
-                    Start building something amazing today
+                    Start a fresh workspace
                   </Dialog.Description>
                 </div>
               </div>
@@ -947,16 +1066,16 @@ export const Dashboard: React.FC = () => {
             
             <div className="space-y-6">
               <div className="space-y-2">
-                <label htmlFor="project-name" className="text-xs font-medium text-zinc-500 ml-1">Project Name</label>
+                <label htmlFor="project-name" className="text-xs font-semibold text-zinc-500 ml-1">Project Name</label>
                 <input 
                   id="project-name"
                   name="projectName"
                   type="text"
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
-                  placeholder="e.g. My Awesome App"
+                  placeholder="e.g. My Website"
                   className={cn(
-                    "w-full border rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-all",
+                    "w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-all",
                     theme === 'dark' ? "bg-white/[0.03] border-white/10 text-white placeholder:text-zinc-700" : "bg-zinc-50 border-zinc-200 text-zinc-900 placeholder:text-zinc-300"
                   )}
                   autoFocus
@@ -964,15 +1083,15 @@ export const Dashboard: React.FC = () => {
               </div>
               
               <div className="space-y-2">
-                <label htmlFor="project-desc" className="text-xs font-medium text-zinc-500 ml-1">Description (Optional)</label>
+                <label htmlFor="project-desc" className="text-xs font-semibold text-zinc-500 ml-1">Description (Optional)</label>
                 <textarea 
                   id="project-desc"
                   name="projectDesc"
                   value={newProjectDesc}
                   onChange={(e) => setNewProjectDesc(e.target.value)}
-                  placeholder="What are you building?"
+                  placeholder="Short brief..."
                   className={cn(
-                    "w-full border rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-all h-24 resize-none",
+                    "w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-all h-24 resize-none",
                     theme === 'dark' ? "bg-white/[0.03] border-white/10 text-white placeholder:text-zinc-700" : "bg-zinc-50 border-zinc-200 text-zinc-900 placeholder:text-zinc-300"
                   )}
                 />
@@ -982,11 +1101,11 @@ export const Dashboard: React.FC = () => {
                 onClick={createNewProject}
                 disabled={isSubmitting || !newProjectName.trim()}
                 className={cn(
-                  "w-full py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100",
-                  "bg-emerald-500 text-black"
+                  "w-full py-3 rounded-xl text-sm font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 shadow-lg",
+                  "bg-emerald-500 text-black shadow-emerald-500/10"
                 )}
               >
-                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create Project'}
+                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Create Project'}
               </button>
             </div>
           </Dialog.Content>
@@ -996,23 +1115,26 @@ export const Dashboard: React.FC = () => {
       {/* Import Repo Dialog */}
       <Dialog.Root open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] animate-in fade-in duration-300" />
+          <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] animate-in fade-in duration-200" />
           <Dialog.Content className={cn(
-            "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md border rounded-3xl p-8 shadow-2xl z-[101] outline-none animate-in zoom-in-95 duration-200",
-            theme === 'dark' ? "bg-[#0c0c0c] border-white/10" : "bg-white border-zinc-200"
+            "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md border shadow-2xl z-[101] outline-none animate-in zoom-in-95 duration-200 p-8",
+            theme === 'dark' ? "bg-[#0c0c0c] border-white/10 rounded-2xl" : "bg-white border-zinc-200 rounded-2xl"
           )}>
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-zinc-900 dark:bg-white rounded-xl flex items-center justify-center text-white dark:text-black">
+                <div className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center",
+                  theme === 'dark' ? "bg-white text-black" : "bg-zinc-900 text-white"
+                )}>
                   <Github className="w-5 h-5" />
                 </div>
                 <div>
                   <Dialog.Title className={cn(
-                    "text-lg font-semibold tracking-tight",
+                    "text-lg font-bold tracking-tight",
                     theme === 'dark' ? "text-white" : "text-zinc-900"
                   )}>Import Repository</Dialog.Title>
                   <Dialog.Description className="text-zinc-500 text-xs mt-0.5">
-                    Connect your GitHub account
+                    Connect your GitHub project
                   </Dialog.Description>
                 </div>
               </div>
@@ -1026,8 +1148,8 @@ export const Dashboard: React.FC = () => {
             
             <div className="space-y-6">
               <div className="space-y-2">
-                <label htmlFor="github-url" className="text-xs font-medium text-zinc-500 ml-1">GitHub Repository URL</label>
-                <div className="relative">
+                <label htmlFor="github-url" className="text-xs font-semibold text-zinc-500 ml-1">GitHub URL</label>
+                <div className="relative group">
                   <Github className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                   <input 
                     id="github-url"
@@ -1037,7 +1159,7 @@ export const Dashboard: React.FC = () => {
                     onChange={(e) => setGithubUrl(e.target.value)}
                     placeholder="https://github.com/user/repo"
                     className={cn(
-                      "w-full border rounded-xl pl-11 pr-4 py-3 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-all",
+                      "w-full border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-all",
                       theme === 'dark' ? "bg-white/[0.03] border-white/10 text-white placeholder:text-zinc-700" : "bg-zinc-50 border-zinc-200 text-zinc-900 placeholder:text-zinc-300"
                     )}
                     autoFocus
@@ -1047,11 +1169,11 @@ export const Dashboard: React.FC = () => {
 
               <div className={cn(
                 "p-4 rounded-xl flex items-start gap-3 border",
-                theme === 'dark' ? "bg-emerald-500/[0.02] border-emerald-500/10" : "bg-emerald-50 border-emerald-100"
+                theme === 'dark' ? "bg-emerald-500/[0.03] border-emerald-500/10" : "bg-emerald-50 border-emerald-100"
               )}>
-                <Github className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <p className="text-[11px] text-zinc-500 leading-relaxed">
-                  We'll clone the repository into your workspace and set up a new project environment for you.
+                <Info className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-zinc-500 leading-relaxed font-medium">
+                  We'll clone the repository into your workspace and prepare the development environment.
                 </p>
               </div>
 
@@ -1059,8 +1181,8 @@ export const Dashboard: React.FC = () => {
                 onClick={importRepo}
                 disabled={isSubmitting || !githubUrl.trim()}
                 className={cn(
-                  "w-full py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center relative overflow-hidden",
-                  "bg-emerald-500 text-black"
+                  "w-full py-3 rounded-xl text-sm font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center relative overflow-hidden",
+                  "bg-emerald-500 text-black shadow-lg shadow-emerald-500/10"
                 )}
               >
                 {isSubmitting ? (
@@ -1086,7 +1208,7 @@ export const Dashboard: React.FC = () => {
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] animate-in fade-in duration-300" />
           <Dialog.Content className={cn(
-            "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md border rounded-3xl p-8 shadow-2xl z-[101] outline-none animate-in zoom-in-95 duration-200",
+            "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md border rounded-2xl p-8 shadow-2xl z-[101] outline-none animate-in zoom-in-95 duration-200",
             theme === 'dark' ? "bg-[#0c0c0c] border-white/10" : "bg-white border-zinc-200"
           )}>
             <div className="flex items-center justify-between mb-8">
@@ -1119,7 +1241,7 @@ export const Dashboard: React.FC = () => {
               )}>
                 <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                 <p className="text-[11px] text-zinc-500 leading-relaxed">
-                  Are you sure you want to delete this project? All files and data will be permanently removed from our servers.
+                  Are you sure you want to delete this project? All files will be permanently removed from your workspace.
                 </p>
               </div>
 

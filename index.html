@@ -9,8 +9,15 @@
   <link rel="icon" type="image/png" href="/favicon.png" />
 </head>
 
-<body class="light">
+<body class="light" style="margin: 0; overflow: hidden;">
   <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
     #initial-loader {
       display: flex;
       flex-direction: column;
@@ -20,6 +27,11 @@
       width: 100vw;
       background-color: #0c0c0c;
       transition: background-color 0.3s;
+      overflow: hidden;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 9999;
     }
     body.light #initial-loader {
       background-color: #ffffff;
@@ -50,18 +62,76 @@
   </style>
   <div id="root">
     <div id="initial-loader">
-      <img src="/logo.png" class="loader-logo" alt="Leara.ai" />
+      <div id="loader-brand" style="position: relative; width: 64px; height: 64px;">
+        <!-- Logo Image -->
+        <img src="/logo.png" id="logo-img" style="width: 100%; height: 100%; object-fit: contain; position: absolute; z-index: 2; display: block;" />
+        
+        <!-- Premium Fallback Icon -->
+        <div id="logo-fallback" style="width: 64px; height: 64px; background: linear-gradient(135deg, #10b981 0%, #0d9488 100%); border-radius: 16px; display: none; align-items: center; justify-content: center; color: white; box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.3); animation: pulse 1.5s infinite; position: absolute; top: 0; left: 0;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </div>
+      </div>
       <div class="loader-text">Leara.ai</div>
     </div>
+    <script>
+      // More robust logo loading: only show fallback if image definitely fails or takes too long (5s)
+      const img = document.getElementById('logo-img');
+      const fallback = document.getElementById('logo-fallback');
+      
+      if (img && fallback) {
+        // Function to show fallback
+        const showFallback = () => {
+          img.style.display = 'none';
+          fallback.style.display = 'flex';
+        };
+
+        if (img.complete && img.naturalWidth > 0) {
+          // Already loaded
+          img.style.display = 'block';
+          fallback.style.display = 'none';
+        } else {
+          // Wait for load or error
+          img.onload = () => {
+             img.style.display = 'block';
+             fallback.style.display = 'none';
+          };
+          
+          img.onerror = () => {
+            console.warn('Initial logo failed to load, triggering fallback.');
+            showFallback();
+          };
+          
+          // Failsafe timeout: 5 seconds
+          setTimeout(() => {
+            if (!img.complete || img.naturalWidth === 0) {
+              showFallback();
+            }
+          }, 5000);
+        }
+      }
+    </script>
   </div>
   <script>
+    window.onerror = function(msg, url, line, col, error) {
+      console.error("BOOTSTRAP ERROR:", msg, "at", url, line, col);
+      const loader = document.getElementById('initial-loader');
+      if (loader) {
+        const errDiv = document.createElement('div');
+        errDiv.style.color = '#ef4444';
+        errDiv.style.fontSize = '12px';
+        errDiv.style.marginTop = '20px';
+        errDiv.style.maxWidth = '80%';
+        errDiv.style.textAlign = 'center';
+        errDiv.innerText = "Application failed to start: " + msg;
+        loader.appendChild(errDiv);
+      }
+    };
     (function () {
       const savedTheme = localStorage.getItem('app-theme');
       if (savedTheme === 'dark') {
         document.body.classList.remove('light');
       } else if (savedTheme === 'light') {
         document.body.classList.add('light');
-        document.getElementById('initial-loader').style.backgroundColor = '#ffffff';
       }
     })();
   </script>
