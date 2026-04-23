@@ -11,7 +11,10 @@ import { localStore } from '../lib/storage';
 import { storageService } from '../lib/storageService';
 
 export function FileExplorer() {
-  const { userId, files, setFiles, setActiveFile, activeFile, setCurrentView, activeProject, theme, setEditorHighlightQuery, setSidebarTab } = useStore();
+  const { 
+    userId, files, setFiles, addOpenFile, removeOpenFile, setActiveFile, activeFile, 
+    setCurrentView, activeProject, theme, setEditorHighlightQuery, setSidebarTab, modifiedFiles 
+  } = useStore();
   const [loading, setLoading] = useState(false);
   const [githubUrl, setGithubUrl] = useState('');
   const [isImporting, setIsImporting] = useState(false);
@@ -113,7 +116,7 @@ export function FileExplorer() {
     try {
       await storageService.deleteNode(userId, activeProject.id, path);
       fetchFiles();
-      if (activeFile?.id === path) setActiveFile(null);
+      removeOpenFile(path);
     } catch (err) {
       toast.error('Failed to delete', {
         description: err instanceof Error ? err.message : String(err),
@@ -185,7 +188,7 @@ export function FileExplorer() {
         'sql': 'sql',
       };
       const language = languageMap[ext || ''] || 'javascript';
-      setActiveFile({ ...node, content: res.data.content, language });
+      addOpenFile({ ...node, content: res.data.content, language });
     } catch (err) {
       console.error('Failed to open file:', err);
     }
@@ -299,7 +302,12 @@ export function FileExplorer() {
                           className="bg-[#1e1e1e] border border-emerald-500 rounded px-1.5 py-0.5 text-xs w-full outline-none text-white"
                         />
                       ) : (
-                        <span className="text-sm whitespace-nowrap overflow-hidden text-ellipsis flex-1">{node.name || 'Unnamed'}</span>
+                        <div className="flex-1 flex items-center justify-between min-w-0 pr-1">
+                          <span className="text-sm whitespace-nowrap overflow-hidden text-ellipsis mr-2">{node.name || 'Unnamed'}</span>
+                          {modifiedFiles.has(node.id) && (
+                            <span className="text-[9px] font-black text-amber-500 shrink-0">M</span>
+                          )}
+                        </div>
                       )}
                     </div>
                     {!isRenaming && (

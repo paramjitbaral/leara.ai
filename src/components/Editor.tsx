@@ -6,6 +6,7 @@ import { Loader2, Save, Cloud, Zap } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { storageService } from '../lib/storageService';
+import { EditorTabs } from './EditorTabs';
 import { editor } from 'monaco-editor';
 import { LearaLogo } from './LearaLogo';
 import { cn } from '../lib/utils';
@@ -19,7 +20,7 @@ export function Editor() {
     activeFile, setActiveFile, userId, theme, activeProject, 
     editorHighlightQuery, setEditorHighlightQuery, 
     editorScrollLine, setEditorScrollLine,
-    setSidebarTab, setIsAIPanelOpen 
+    setSidebarTab, setIsAIPanelOpen, setModified, originalContents
   } = useStore();
 
   useEffect(() => {
@@ -83,7 +84,7 @@ export function Editor() {
       console.error('Failed to save file:', err);
       toast.error('Failed to save changes');
     }
-  }, [activeFile, userId, activeProject]);
+  }, [activeFile, userId, activeProject, setModified]);
 
   // Cleanup on unmount or file change
   useEffect(() => {
@@ -100,6 +101,11 @@ export function Editor() {
     
     // Update local state immediately
     setActiveFile({ ...activeFile, content: newContent });
+    
+    // Compare with original content to decide if modified
+    const original = originalContents[activeFile.id] || '';
+    setModified(activeFile.id, newContent !== original);
+    
     clearHighlight();
 
     // Debounced auto-save
@@ -229,23 +235,7 @@ export function Editor() {
 
   return (
     <div className="h-full w-full flex flex-col bg-[#1e1e1e]">
-      <div className="h-10 bg-[#1e1e1e] border-b border-white/5 flex items-center px-4 justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
-          <span className="font-bold uppercase text-[10px] tracking-wider text-zinc-400">{activeFile.name}</span>
-          <div className="flex items-center gap-1.5 ml-2">
-            <Cloud className="w-3 h-3 text-emerald-500/50" />
-            <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Local & Cloud Sync Active</span>
-          </div>
-        </div>
-        <button 
-          onClick={() => handleSave(activeFile.content || '')} 
-          className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white"
-          title="Save File"
-        >
-          <Save className="w-3.5 h-3.5" />
-        </button>
-      </div>
+      <EditorTabs />
       <div className="flex-1">
         <MonacoEditor
           height="100%"

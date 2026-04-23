@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { User } from 'firebase/auth';
+import { storageService } from './lib/storageService';
+import { toast } from 'sonner';
 
 export interface FileNode {
   id: string;
@@ -24,6 +26,18 @@ interface AppState {
   
   activeFile: FileNode | null;
   setActiveFile: (file: FileNode | null) => void;
+
+  openFiles: FileNode[];
+  addOpenFile: (file: FileNode) => void;
+  removeOpenFile: (fileId: string) => void;
+  closeAllFiles: () => void;
+  saveFile: (fileId: string, content: string) => Promise<void>;
+  saveAllFiles: () => Promise<void>;
+  
+  modifiedFiles: Set<string>;
+  originalContents: Record<string, string>;
+  setModified: (fileId: string, modified: boolean) => void;
+  updateOriginalContent: (fileId: string, content: string) => void;
   
   aiMode: AIMode;
   setAiMode: (mode: AIMode) => void;
@@ -120,7 +134,87 @@ export const useStore = create<AppState>((set) => ({
   setFiles: (files) => set({ files }),
   
   activeFile: null,
-  setActiveFile: (file) => set({ activeFile: file }),
+  setActiveFile: (file) => set((state) => {
+    if (!file) return { activeFile: null };
+    const newOpenFiles = state.openFiles.map((f) => 
+      f.id === file.id ? file : f
+    );
+    return { 
+      activeFile: file,
+      openFiles: newOpenFiles
+    };
+  }),
+
+  openFiles: [],
+  addOpenFile: (file) => set((state) => {
+    const isAlreadyOpen = state.openFiles.find((f) => f.id === file.id);
+    if (isAlreadyOpen) {
+      return { activeFile: isAlreadyOpen };
+    }
+    return {
+      openFiles: [...state.openFiles, file],
+      activeFile: file,
+      originalContents: { ...state.originalContents, [file.id]: file.content || '' }
+    };
+  }),
+  removeOpenFile: (fileId) => set((state) => {
+    const newOpenFiles = state.openFiles.filter((f) => f.id !== fileId);
+    let newActiveFile = state.activeFile;
+    if (state.activeFile?.id === fileId) {
+      newActiveFile = newOpenFiles.length > 0 ? newOpenFiles[newOpenFiles.length - 1] : null;
+    }
+    const newOriginals = { ...state.originalContents };
+    delete newOriginals[fileId];
+    return {
+      openFiles: newOpenFiles,
+      activeFile: newActiveFile,
+      originalContents: newOriginals
+    };
+  }),
+  closeAllFiles: () => set({ openFiles: [], activeFile: null, modifiedFiles: new Set(), originalContents: {} }),
+
+  modifiedFiles: new Set(),
+  originalContents: {},
+  setModified: (fileId, modified) => set((state) => {
+    const newSet = new Set(state.modifiedFiles);
+    if (modified) newSet.add(fileId);
+    else newSet.delete(fileId);
+    return { modifiedFiles: newSet };
+  }),
+  updateOriginalContent: (fileId, content) => set((state) => ({
+    originalContents: { ...state.originalContents, [fileId]: content }
+  })),
+
+  saveFile: async (fileId, content) => {
+    const state = useStore.getState();
+    if (!state.activeProject) return;
+    
+    try {
+      const file = state.openFiles.find(f => f.id === fileId);
+      await storageService.saveFile(
+        state.userId,
+        state.activeProject.id,
+        fileId,
+        content,
+        file?.language || 'javascript'
+      );
+      state.updateOriginalContent(fileId, content);
+      state.setModified(fileId, false);
+    } catch (err) {
+      console.error('Failed to save file:', err);
+      toast.error(`Failed to save ${fileId}`);
+      throw err;
+    }
+  },
+
+  saveAllFiles: async () => {
+    const state = useStore.getState();
+    const savePromises = state.openFiles.map(file => 
+      state.saveFile(file.id, file.content || '')
+    );
+    await Promise.all(savePromises);
+    toast.success('All files saved');
+  },
   
   aiMode: 'explain',
   setAiMode: (mode) => set({ aiMode: mode }),
@@ -151,7 +245,6 @@ export const useStore = create<AppState>((set) => ({
     localStorage.setItem('ai-provider', provider);
     set((state) => ({ 
       aiProvider: provider,
-      // Automatically switch userApiKey when provider changes
       userApiKey: state.providerKeys[provider] || null
     }));
   },
@@ -204,7 +297,6 @@ export const useStore = create<AppState>((set) => ({
   setLearningPasscode: (code) => set({ learningPasscode: code }),
 
   activeProject: null,
-  // When setting active project, we also want to ensure we're in editor view
   setActiveProject: (project) => set({ activeProject: project, currentView: project ? 'editor' : 'dashboard' }),
 
   theme: getInitialTheme(),
