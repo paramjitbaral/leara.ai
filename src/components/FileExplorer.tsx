@@ -299,11 +299,11 @@ export function FileExplorer() {
                           className="bg-[#1e1e1e] border border-emerald-500 rounded px-1.5 py-0.5 text-xs w-full outline-none text-white"
                         />
                       ) : (
-                        <span className="truncate text-sm">{node.name || 'Unnamed'}</span>
+                        <span className="text-sm whitespace-nowrap overflow-hidden text-ellipsis flex-1">{node.name || 'Unnamed'}</span>
                       )}
                     </div>
                     {!isRenaming && (
-                      <div className="opacity-0 group-hover:opacity-100 flex gap-1 shrink-0">
+                      <div className="hidden group-hover:flex items-center gap-1 shrink-0">
                         {node.type === 'directory' && (
                           <button 
                             onClick={(e) => { 
@@ -396,42 +396,42 @@ export function FileExplorer() {
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-2 group">
+            <div className="flex-1 flex items-center gap-2 group min-w-0 mr-2">
               <button 
                 onClick={() => setCurrentView('dashboard')}
-                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white"
+                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white shrink-0"
                 title="Go to Dashboard"
               >
                 <LayoutDashboard className="w-3.5 h-3.5" />
               </button>
-              <div className="w-px h-3 bg-white/10 mx-1" />
-              <span className="font-bold uppercase text-[10px] tracking-wider text-zinc-400">Explorer</span>
+              <div className="w-px h-3 bg-white/10 mx-1 shrink-0" />
+              <span className="font-bold uppercase text-[10px] tracking-wider text-zinc-400 truncate">Explorer</span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 shrink-0">
               <button 
                 onClick={() => setCreating({ type: 'file', parent: activeProject?.folderName || '' })} 
-                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white" 
+                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white shrink-0" 
                 title="New File"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
               <button 
                 onClick={() => setCreating({ type: 'directory', parent: activeProject?.folderName || '' })} 
-                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white" 
+                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white shrink-0" 
                 title="New Folder"
               >
                 <FolderPlus className="w-3.5 h-3.5" />
               </button>
               <button 
                 onClick={() => setSidebarTab('search')} 
-                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white" 
+                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white shrink-0" 
                 title="Search Workspace"
               >
                 <Search className="w-3.5 h-3.5" />
               </button>
               <button 
                 onClick={() => fetchFiles()} 
-                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white" 
+                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white shrink-0" 
                 title="Refresh"
               >
                 <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />

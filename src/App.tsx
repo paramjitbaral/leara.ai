@@ -72,7 +72,7 @@ export default function App() {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizingAI) return;
       const newWidth = window.innerWidth - e.clientX - 48; // 48 is right toggle bar
-      if (newWidth > 200 && newWidth < 800) {
+      if (newWidth > 320 && newWidth < 800) {
         setAiSidebarWidth(newWidth);
       }
     };
@@ -546,6 +546,7 @@ export default function App() {
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: aiSidebarWidth, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
+              style={{ minWidth: isAIPanelOpen ? 320 : 0 }}
               className="relative border-l border-white/5 bg-[#1e1e1e] flex flex-col z-20 shrink-0"
             >
               {/* Resize Handle */}
