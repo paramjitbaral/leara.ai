@@ -93,6 +93,51 @@ app.get("/api/files", async (req, res) => {
   }
 });
 
+// Get workspace storage stats
+app.get("/api/workspace/stats", async (req, res) => {
+  const { userId } = req.query;
+  const uid = (userId as string) || "local-user";
+  const userPath = path.join(WORKSPACE_ROOT, uid);
+
+  let totalSize = 0;
+  
+  const calculateSize = async (dir: string) => {
+    if (!fs.existsSync(dir)) return;
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (['node_modules', '.git', '.next', 'dist', 'build', '__pycache__', 'my_env', '.venv', 'venv'].includes(entry.name)) {
+        continue; // Skip heavy dependency/framework folders to show real code footprint
+      }
+      
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await calculateSize(fullPath);
+      } else {
+        try {
+          const stats = await fs.stat(fullPath);
+          totalSize += stats.size;
+        } catch (e) {}
+      }
+    }
+  };
+
+  try {
+    await calculateSize(userPath);
+    
+    // Format byte footprint into human-readable industrial standard
+    let formattedLog = "0 B";
+    if (totalSize === 0) formattedLog = "0 B";
+    else if (totalSize > 1073741824) formattedLog = (totalSize / 1073741824).toFixed(1) + " GB";
+    else if (totalSize > 1048576) formattedLog = (totalSize / 1048576).toFixed(1) + " MB";
+    else if (totalSize > 1024) formattedLog = (totalSize / 1024).toFixed(1) + " KB";
+    else formattedLog = totalSize + " B";
+
+    res.json({ bytes: totalSize, formatted: formattedLog });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Read file
 app.get("/api/files/content", async (req, res) => {
   const { userId, path: filePath } = req.query;

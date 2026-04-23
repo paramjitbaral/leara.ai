@@ -106,10 +106,25 @@ export const Dashboard: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [projectSubFilter, setProjectSubFilter] = useState<'all' | 'archived'>('all');
+  const [storageUsed, setStorageUsed] = useState('Calculating...');
 
   const handleProjectClick = (project: any) => {
     setActiveProject(project);
     setCurrentView('editor');
+  };
+
+  const fetchStorageStats = async () => {
+    try {
+      const res = await axios.get(`/api/workspace/stats?userId=${user?.uid || 'local-desktop-user'}`);
+      if (res.data && res.data.formatted) {
+        setStorageUsed(res.data.formatted);
+      } else {
+        setStorageUsed('Restart Server!');
+      }
+    } catch (e) {
+      console.warn('Could not fetch storage stats', e);
+      setStorageUsed('Unknown');
+    }
   };
 
   useEffect(() => {
@@ -160,6 +175,7 @@ export const Dashboard: React.FC = () => {
     };
 
     fetchProjects();
+    fetchStorageStats();
   }, [user]);
 
   const backupFilesToFirestore = async (projectId: string, files: any[]) => {
@@ -234,6 +250,7 @@ export const Dashboard: React.FC = () => {
       setIsCreateDialogOpen(false);
       setNewProjectName('');
       setNewProjectDesc('');
+      fetchStorageStats();
     } catch (error) {
       console.error("Error creating project:", error);
       toast.error('Failed to create project');
@@ -324,6 +341,7 @@ export const Dashboard: React.FC = () => {
         setIsImportDialogOpen(false);
         setGithubUrl('');
         setImportProgress(0);
+        fetchStorageStats();
         // Automatically open the project
         if (newProject) {
           handleProjectClick(newProject);
@@ -350,9 +368,14 @@ export const Dashboard: React.FC = () => {
     
     try {
       await storageService.deleteProject(userId, projectId, folderName);
+      
+      // Remove from local state immediately in case Firestore isn't connected
+      setProjects(prev => prev.filter(p => p.id !== projectId));
+      
       toast.success('Project deleted');
       setIsDeleteDialogOpen(false);
       setProjectToDelete(null);
+      fetchStorageStats();
     } catch (error) {
       console.error("Error deleting project:", error);
       toast.error('Failed to delete project');
@@ -615,7 +638,7 @@ export const Dashboard: React.FC = () => {
                       { title: 'Recent Projects', icon: Clock, count: projects.length, color: 'emerald' },
                       { title: 'Starred', icon: Star, count: projects.filter(p => p.isStarred).length, color: 'yellow' },
                       { title: 'Collaborators', icon: User, count: 0, color: 'emerald' },
-                      { title: 'Storage Used', icon: Layers, count: '1.2GB', color: 'emerald' },
+                      { title: 'Storage Used', icon: Layers, count: storageUsed, color: 'emerald' },
                     ].map((stat, i) => (
                       <motion.div 
                         key={i}
@@ -635,7 +658,8 @@ export const Dashboard: React.FC = () => {
                         </div>
                         <h4 className="text-zinc-500 text-xs font-bold uppercase tracking-wider">{stat.title}</h4>
                         <p className={cn(
-                          "text-2xl font-bold mt-1",
+                          "mt-1",
+                          typeof stat.count === 'string' && stat.count.length > 10 ? "text-base font-semibold opacity-70 mt-3" : "text-2xl font-bold",
                           theme === 'dark' ? "text-white" : "text-zinc-900"
                         )}>{stat.count}</p>
                       </motion.div>
