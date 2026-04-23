@@ -33,7 +33,7 @@ export function TopBar({ onEnterLearnMode }: TopBarProps) {
   return (
     <>
       <header className={cn(
-        "h-14 border-b flex items-center justify-between px-6 shrink-0 z-50 transition-colors",
+        "h-11 border-b flex items-center justify-between px-6 shrink-0 z-50 transition-colors",
         theme === 'dark' ? "bg-[#1e1e1e] border-white/5" : "bg-white border-zinc-200"
       )}>
         <div className="flex items-center gap-8">
@@ -41,12 +41,12 @@ export function TopBar({ onEnterLearnMode }: TopBarProps) {
             <LearaLogo size="sm" />
           </div>
 
-          <div className={cn("h-6 w-[1px]", theme === 'dark' ? "bg-white/10" : "bg-zinc-200")} />
+          <div className={cn("h-4 w-[1px]", theme === 'dark' ? "bg-white/10" : "bg-zinc-200")} />
 
           <button
             onClick={onEnterLearnMode}
             className={cn(
-              "flex items-center gap-2.5 px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all",
+              "flex items-center gap-2 px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-[0.2em] transition-all",
               isLearningActive
                 ? "bg-emerald-500 text-black shadow-xl shadow-emerald-500/20"
                 : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white border border-white/5"
@@ -78,7 +78,7 @@ export function TopBar({ onEnterLearnMode }: TopBarProps) {
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
 
-          <div className={cn("h-6 w-[1px]", theme === 'dark' ? "bg-white/10" : "bg-zinc-200")} />
+          <div className={cn("h-4 w-[1px]", theme === 'dark' ? "bg-white/10" : "bg-zinc-200")} />
 
           <div className="flex items-center gap-4">
             <div className="flex flex-col items-end">
@@ -94,10 +94,10 @@ export function TopBar({ onEnterLearnMode }: TopBarProps) {
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <button className={cn(
-                  "w-10 h-10 rounded-2xl flex items-center justify-center text-zinc-500 overflow-hidden transition-all active:scale-95",
+                  "w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 overflow-hidden transition-all active:scale-95",
                   theme === 'dark' ? "bg-zinc-800 border border-white/5 hover:border-emerald-500/50" : "bg-zinc-100 border border-zinc-200 hover:border-emerald-500/50"
                 )}>
-                  {user?.photoURL ? <img src={user.photoURL} alt="Avatar" className="w-full h-full object-cover" /> : <User className="w-5 h-5" />}
+                  {user?.photoURL ? <img src={user.photoURL} alt="Avatar" className="w-full h-full object-cover" /> : <User className="w-4 h-4" />}
                 </button>
               </DropdownMenu.Trigger>
               <DropdownMenu.Portal>

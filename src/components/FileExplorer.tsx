@@ -375,7 +375,7 @@ export function FileExplorer() {
 
   return (
     <div className="flex flex-col h-full bg-[#1e1e1e] text-[#cccccc] select-none">
-      <div className="h-10 flex items-center justify-between px-4 border-b border-white/5 bg-[#1e1e1e]">
+      <div className="h-8 flex items-center justify-between px-4 border-b border-white/5 bg-[#111]">
         {isSearching ? (
           <div className="flex-1 flex items-center gap-2">
             <Search className="w-3 h-3 text-emerald-500" />
@@ -412,7 +412,6 @@ export function FileExplorer() {
               >
                 <LayoutDashboard className="w-3.5 h-3.5" />
               </button>
-              <div className="w-px h-3 bg-white/10 mx-1 shrink-0" />
               <span className="font-bold uppercase text-[10px] tracking-wider text-zinc-400 truncate">Explorer</span>
             </div>
             <div className="flex items-center gap-1 shrink-0">
