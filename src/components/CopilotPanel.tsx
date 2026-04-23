@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../store';
 import { cn } from '../lib/utils';
-import { Send, Sparkles, Bug, Zap, PlusCircle, Loader2, User, Bot, X, LayoutDashboard, Plus, Mic, ArrowUp, ChevronDown, Cpu, Globe, Monitor, Link, Check, GraduationCap, BrainCircuit, Terminal, Play, Copy, FileCode } from 'lucide-react';
+import { Send, Sparkles, Bug, Zap, PlusCircle, Loader2, User, Bot, X, LayoutDashboard, Plus, Mic, ArrowUp, ChevronDown, Cpu, Globe, Monitor, Link, Check, GraduationCap, BrainCircuit, Terminal, Play, Copy, FileCode, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import ReactMarkdown from 'react-markdown';
@@ -15,7 +15,7 @@ interface Message {
 
 const SHELL_LANGS = new Set(['bash', 'sh', 'shell', 'powershell', 'ps1', 'cmd', 'zsh', 'fish']);
 const SHELL_CMD_RE = /^(npm|npx|node|python3?|pip3?|git|cd|ls|dir|mkdir|rm|mv|cp|yarn|pnpm|cargo|go run|make|tsc|dotnet|java|mvn)\b/;
-const CODE_LANGS = new Set(['js','javascript','ts','typescript','tsx','jsx','py','python','json','html','css','scss','java','c','cpp','cs','go','rs','rust','rb','ruby','php','swift','kt','sql','yaml','yml','toml','md','sh']);
+const CODE_LANGS = new Set(['js', 'javascript', 'ts', 'typescript', 'tsx', 'jsx', 'py', 'python', 'json', 'html', 'css', 'scss', 'java', 'c', 'cpp', 'cs', 'go', 'rs', 'rust', 'rb', 'ruby', 'php', 'swift', 'kt', 'sql', 'yaml', 'yml', 'toml', 'md', 'sh']);
 
 const SLASH_COMMANDS = [
   { id: 'explain', label: 'Explain', description: 'Understand how this code works', icon: GraduationCap },
@@ -26,7 +26,7 @@ const SLASH_COMMANDS = [
 
 // Shell command block → shows Run in Terminal + live output
 function ShellBlock({ code }: { code: string }) {
-  const { theme } = useStore();
+  const { theme, setIsTerminalOpen, setTerminalCommand } = useStore();
   const [output, setOutput] = useState('');
   const [running, setRunning] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -52,6 +52,12 @@ function ShellBlock({ code }: { code: string }) {
     finally { setRunning(false); }
   };
 
+  const runSystem = () => {
+    setIsTerminalOpen(true);
+    setTerminalCommand(code.trim());
+    toast.success('Command sent to system terminal');
+  };
+
   const copy = () => { navigator.clipboard.writeText(code.trim()); setCopied(true); setTimeout(() => setCopied(false), 1500); };
 
   return (
@@ -71,13 +77,23 @@ function ShellBlock({ code }: { code: string }) {
           <button onClick={copy} title="Copy" className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors">
             {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
           </button>
+          
+          <button
+            onClick={runSystem}
+            className="flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-500/10 border border-zinc-500/20 text-zinc-400 hover:text-white hover:bg-zinc-500/20 transition-all text-[8px] font-bold uppercase tracking-tight"
+            title="Run in System Terminal"
+          >
+            <Play className="w-2.5 h-2.5" />
+            Terminal
+          </button>
+
           <button
             onClick={run}
             disabled={running}
             className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all text-[8px] font-bold uppercase tracking-tight disabled:opacity-40"
           >
-            {running ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Play className="w-2.5 h-2.5" />}
-            {running ? '...' : 'Run'}
+            {running ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Zap className="w-2.5 h-2.5 text-emerald-500" />}
+            {running ? '...' : 'Inline'}
           </button>
         </div>
       </div>
@@ -151,8 +167,8 @@ export function CopilotPanel() {
   const {
     activeFile, aiMode, setAiMode, aiProvider, setAiProvider,
     userApiKey, userId, setCurrentView, aiModel, theme, providerKeys,
-    setIsApiKeyModalOpen, setIsAIPanelOpen, aiPresets, applyPreset, activePresetId,
-    user
+    setIsApiKeyModalOpen, setIsAIPanelOpen, aiPresets, applyPreset, activePresetId, 
+    user, activeProject, chatHistories, setProjectMessages
   } = useStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -162,6 +178,21 @@ export function CopilotPanel() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Sync with project-specific history
+  useEffect(() => {
+    if (activeProject?.id) {
+      setMessages(chatHistories[activeProject.id] || []);
+    } else {
+      setMessages([]);
+    }
+  }, [activeProject?.id]);
+
+  useEffect(() => {
+    if (activeProject?.id) {
+      setProjectMessages(activeProject.id, messages);
+    }
+  }, [messages, activeProject?.id, setProjectMessages]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
@@ -176,11 +207,11 @@ export function CopilotPanel() {
       setShowCommands(false);
       return;
     }
-    
+
     if (cmd.id === 'explain') setAiMode('explain');
     else if (cmd.id === 'fix') setAiMode('build');
     else if (cmd.id === 'tests') setAiMode('build');
-    
+
     setInput(`/${cmd.id} `);
     setShowCommands(false);
     inputRef.current?.focus();
@@ -233,55 +264,152 @@ export function CopilotPanel() {
     setIsLoading(true);
 
     try {
-      const context = {
-        fileName: activeFile?.name,
-        language: activeFile?.language,
-        content: activeFile?.content,
-        mode: aiMode,
+      const allFiles = useStore.getState().files;
+      const getFileNames = (nodes: any[], indent = ''): string => {
+        return nodes.map(n => `${indent}${n.type === 'directory' ? '📁' : '📄'} ${n.name}${n.children ? '\n' + getFileNames(n.children, indent + '  ') : ''}`).join('\n');
       };
 
+      const projectContext = `Project Structure:\n${getFileNames(allFiles).slice(0, 1000)}\n\n`;
+
       const fileContext = activeFile
-        ? `Currently open file: ${activeFile.name} (${activeFile.language || 'unknown'})\n\nFile content:\n\`\`\`\n${(activeFile.content || '').slice(0, 3000)}\n\`\`\``
-        : 'No file currently open in the editor.';
+        ? `Active File: ${activeFile.name} (${activeFile.language || 'unknown'})\nContent:\n\`\`\`${activeFile.language || ''}\n${(activeFile.content || '').slice(0, 5000)}\n\`\`\``
+        : 'No file active.';
 
-      const commonRules = `- You have direct access to the user's open file shown below. Use it for all responses.
-- NEVER ask "what project?" or "what tech stack?" — you can see it.
-- NEVER ask for more information. Work with what you have.
-- No intros, no sign-offs, no "Great question!", no filler.
-- For greetings like "hi", reply in one sentence.
-
-${fileContext}`;
+      const commonRules = `- You are Leara Core, a world-class AI developer assistant for the Leara IDE. 
+- You have the same intelligence and helpfulness as VS Code Copilot or better.
+- PLATFORM: You are running on Windows. Use Windows-compatible shell commands (e.g., use 'type' instead of 'cat', 'dir' instead of 'ls').
+- TERMINAL: Your shell is PowerShell/CMD.
+- TOOL USE: DO NOT use XML tags like <tool_call>. Only output standard Markdown code blocks. 
+- If you need to run a command, use a shell block. The user can run it directly.
+- Always check for errors in the user's logic and proactively offer fixes.
+- Be concise but conversational. Briefly explain your reasoning.
+- You can see the whole project structure and the active file. Use this to provide deep context.
+`;
 
       const systemInstructions = {
-        build: `You are a senior software engineer and code editor inside the Leara IDE.
-YOUR ONLY JOB IS TO WRITE, EDIT, FIX, AND MODIFY CODE.
-RULES:
-- When asked to fix/edit/run/refactor/create anything → just DO IT. Output the code directly.
-- Provide ONLY the modified code or the exact terminal command. Nothing else.
-- Do NOT explain what you changed unless the user specifically asks "why" or "explain".
-- If asked to run the project → read package.json scripts or main files and give the exact command.
-- Use markdown code blocks for all code.
-${commonRules}`,
+        build: `${commonRules}
+- Mode: BUILD & OPERATE (Agentic Reasoning).
+- YOUR PRIMARY DIRECTIVE: Persistence and Logical Success.
+- YOU DO NOT GIVE UP. But you must not retry blindly.
+- LOGICAL REASONING LOOP: Before providing a fix for a failed task, you MUST perform a mental check:
+  1. ANALYZE the exact error output received.
+  2. DIAGNOSE the root cause (is it a missing dependency? a path issue? a syntax error?).
+  3. EVALUATE alternative approaches (can you use a different command? is there a better configuration?).
+- After this analysis, provide the most logical next step. Briefly explain your reasoning so the user understands your strategy.
+- If the user asks to "run" or "start", ensure you check package.json and the file structure carefully to provide the correct command.
+- If it fails, treat the failure output as a high-fidelity signal. Do not guess; use the log to fix the logic.
 
-        practice: `You are a coding mentor inside the Leara IDE. Your goal is to TEACH, not just give answers.
-RULES:
-- Guide the user to understand concepts step by step.
-- Ask the user questions to make them think before giving the answer.
-- If they ask for a fix → explain WHY the bug exists first, then show the fix with explanation.
-- Use simple analogies and examples based on the open file.
-- Light code examples are fine but always pair them with explanation.
-- Help the user learn how to fish, not just give them the fish.
-${commonRules}`,
+${projectContext}
+${fileContext}`,
 
-        explain: `You are a technical explainer inside the Leara IDE. Your only job is EXPLAINING code and concepts.
-RULES:
-- Break down code, concepts, and logic into clear, simple terms.
-- Reference the open file directly when explaining.
-- Use bullet points, numbered steps, and analogies.
-- Do NOT write new code unless the user explicitly asks for an example.
-- Focus on the "why" and "how" behind what the code is doing.
-- Response length must match complexity — simple question = simple answer.
-${commonRules}`,
+        practice: `${commonRules}
+- Mode: MENTOR & TEACH.
+- Guide the user to learn by explaining the patterns and principles.
+- Use analogies and clear documentation references.
+- Ask challenging questions to test their knowledge.
+- Help them debug by pointing them to where the error is first, then showing the fix.
+
+${projectContext}
+${fileContext}`,
+
+        explain: `${commonRules}
+- Mode: EXPLAIN & ANALYZE.
+- Provide deep architectural and logical breakdowns of the code.
+- Reference specific lines and functions in the active file.
+- Visualize flows using text-based diagrams or lists.
+- Do not provide implementation code unless asked for an example.
+
+${projectContext}
+${fileContext}`,
+      };
+
+      const runAgenticLoop = async (initialResponse: string) => {
+        let currentResponse = initialResponse;
+        let loopCount = 0;
+        const MAX_LOOPS = 5;
+
+        // Add the initial AI response to chat
+        setMessages(prev => [...prev, { role: 'assistant', content: currentResponse }]);
+
+        while (loopCount < MAX_LOOPS) {
+          // Robust detection: Look for <tool_call> or similar, even if unclosed
+          const regex = /<tool_call>([\s\S]*?)(?:<\/tool_call>|$)/i;
+          const toolMatch = currentResponse.match(regex);
+          if (!toolMatch) break; 
+
+          let rawData = toolMatch[1].trim();
+          // Clean up "cmd" prefix if AI adds it
+          if (rawData.startsWith('cmd')) rawData = rawData.substring(3).trim();
+
+          let toolData;
+          try {
+            toolData = JSON.parse(rawData);
+          } catch (e) {
+            console.warn("Fuzzy JSON parse attempt...");
+            // Try to extract content between first { and last }
+            const jsonPart = rawData.match(/\{[\s\S]*\}/);
+            if (jsonPart) {
+              try { toolData = JSON.parse(jsonPart[0]); } catch (e2) {}
+            }
+          }
+
+          if (toolData && (toolData.name || toolData.command)) {
+            const command = toolData.command || (toolData.arguments?.command);
+            
+            if (command) {
+              // 1. Show status in UI
+              setMessages(prev => [...prev, { role: 'assistant', content: `⚙️ **Executing:** \`${command}\`...`, type: 'build' }]);
+              
+              // 2. Mirror to visual terminal so user sees it live
+              if (command.includes('npm') || command.includes('run') || command.includes('start')) {
+                useStore.getState().setTerminalCommand(command);
+              }
+
+              // 3. Call backend exec
+              const execRes = await fetch('/api/terminal/exec', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  command,
+                  userId: useStore.getState().userId,
+                  folder: activeProject?.folderName
+                })
+              });
+              const execData = await execRes.json();
+              const outputText = `Output:\n${execData.stdout}\n${execData.stderr || ''}`;
+
+              // 4. Show output to user in chat too
+              setMessages(prev => [...prev, { 
+                role: 'assistant', 
+                content: `\`\`\`terminal\n${execData.stdout?.substring(0, 1000)}${execData.stdout?.length > 1000 ? '...' : ''}\n${execData.stderr || ''}\n\`\`\`` 
+              }]);
+
+              // 5. Feed back to AI
+              const nextRes = await fetch('/api/ai/copilot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  prompt: `Command Result: \n${outputText}\n\nContinue.`,
+                  provider: aiProvider,
+                  apiKey: resolvedKey,
+                  model: aiModel,
+                  endpoint: useStore.getState().aiEndpoint,
+                  systemInstruction: systemInstructions[aiMode]
+                })
+              });
+              const nextData = await nextRes.json();
+              if (nextData.error) throw new Error(nextData.error);
+
+              currentResponse = nextData.response;
+              setMessages(prev => [...prev, { role: 'assistant', content: currentResponse }]);
+              loopCount++;
+            } else {
+              break;
+            }
+          } else {
+            break; 
+          }
+        }
       };
 
       const res = await fetch('/api/ai/copilot', {
@@ -289,7 +417,6 @@ ${commonRules}`,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: currentInput || type,
-          context,
           provider: aiProvider,
           apiKey: resolvedKey,
           model: aiModel,
@@ -301,7 +428,8 @@ ${commonRules}`,
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
-      setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+      // Start the Agentic Loop
+      await runAgenticLoop(data.response);
     } catch (err: any) {
       setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
     } finally {
@@ -315,7 +443,7 @@ ${commonRules}`,
       theme === 'dark' ? "bg-[#1e1e1e] text-[#cccccc]" : "bg-white text-zinc-800"
     )}>
       <div className={cn(
-        "h-10 border-b flex items-center justify-between px-4 shrink-0 transition-colors",
+        "h-9 border-b flex items-center justify-between px-3 shrink-0 transition-colors",
         theme === 'dark' ? "bg-[#1e1e1e] border-white/5" : "bg-zinc-50 border-zinc-200"
       )}>
         <div className="flex items-center gap-2">
@@ -325,18 +453,35 @@ ${commonRules}`,
             theme === 'dark' ? "text-white" : "text-zinc-900"
           )}>Leara Core</span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <button
-            onClick={() => setMessages([])}
-            className="p-1.5 hover:bg-white/5 rounded-lg transition-colors text-zinc-500 hover:text-white btn-tactile"
-            title="Clear Chat"
+            onClick={() => toast.info('History coming soon')}
+            className={cn(
+              "p-1.5 rounded-lg transition-all btn-tactile",
+              theme === 'dark' ? "text-zinc-500 hover:text-white hover:bg-white/5" : "text-zinc-500 hover:text-zinc-900 hover:bg-black/5"
+            )}
+            title="Chat History"
           >
-            <PlusCircle className="w-3.5 h-3.5 rotate-45" />
+            <History className="w-3.5 h-3.5" />
           </button>
           <button
+            onClick={() => setMessages([])}
+            className={cn(
+              "p-1.5 rounded-lg transition-all btn-tactile",
+              theme === 'dark' ? "text-zinc-500 hover:text-white hover:bg-white/5" : "text-zinc-500 hover:text-zinc-900 hover:bg-black/5"
+            )}
+            title="New Chat"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+          <div className={cn("w-px h-4 mx-1", theme === 'dark' ? "bg-white/5" : "bg-zinc-200")} />
+          <button
             onClick={() => setIsAIPanelOpen(false)}
-            className="p-1.5 hover:bg-white/5 rounded-lg transition-colors text-zinc-500 hover:text-red-400 btn-tactile"
-            title="Collapse Leara Core"
+            className={cn(
+              "p-1.5 rounded-lg transition-all btn-tactile",
+              theme === 'dark' ? "text-zinc-500 hover:text-red-400 hover:bg-red-400/5" : "text-zinc-500 hover:text-red-600 hover:bg-red-50/50"
+            )}
+            title="Close Panel"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -344,7 +489,7 @@ ${commonRules}`,
       </div>
 
       {/* Professional Chat Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2 scroll-smooth" ref={scrollRef}>
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 scroll-smooth" ref={scrollRef}>
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-40">
             <Bot className="w-10 h-10" />
@@ -355,7 +500,7 @@ ${commonRules}`,
         )}
         {messages.map((msg, i) => (
           <div key={i} className={cn(
-            "flex items-start gap-2.5 py-1",
+            "flex items-start gap-2 py-1",
             msg.role === 'user' ? "flex-row-reverse" : "flex-row"
           )}>
             <div className="shrink-0 mt-0.5">
@@ -380,60 +525,65 @@ ${commonRules}`,
                 ? "flex justify-end"
                 : cn("prose prose-invert max-w-none", theme === 'dark' ? "text-zinc-300" : "text-zinc-700 prose-zinc prose-sm")
             )}>
-              {msg.role === 'user'
-                ? <span className={cn(
-                    "inline-block px-3 py-1.5 rounded-2xl text-left transition-all max-w-[90%] shadow-sm",
-                    theme === 'dark' 
-                      ? "bg-white/[0.08] text-zinc-200" 
-                      : "bg-[#000000] text-white border border-black"
-                  )}>{msg.content}</span>
-                : <div className="space-y-3">
-                    <ReactMarkdown
-                      components={{
-                        code({ node, className, children, ...props }: any) {
-                          const lang = (className || '').replace('language-', '');
-                          const codeStr = String(children).replace(/\n$/, '');
-                          if (!props.inline && (codeStr.includes('\n') || lang)) {
-                            return (
-                              <SmartCodeRenderer
-                                lang={lang}
-                                code={codeStr}
-                                onApply={(code) => {
-                                  if (activeFile) {
-                                    const updated = (activeFile.content || '') + '\n' + code;
-                                    useStore.getState().updateFileContent(activeFile.id, updated);
-                                    toast.success('Code applied to ' + activeFile.name);
-                                  } else {
-                                    toast.error('No file open in editor');
-                                  }
-                                }}
-                              />
-                            );
-                          }
-                          return <code className="bg-white/[0.08] px-1 py-0.5 rounded text-emerald-400 text-[10px] font-mono" {...props}>{children}</code>;
+              {msg.role === 'user' ? (
+                <span className={cn(
+                  "inline-block px-3 py-1.5 rounded-2xl text-left transition-all max-w-[90%]",
+                  theme === 'dark'
+                    ? "bg-white/[0.08] text-zinc-200 border border-white/5"
+                    : "bg-zinc-100 text-zinc-900 border border-zinc-200 shadow-sm"
+                )}>
+                  {msg.content}
+                </span>
+              ) : (
+                <div className="space-y-3">
+                  <ReactMarkdown
+                    components={{
+                      code({ node, className, children, ...props }: any) {
+                        const lang = (className || '').replace('language-', '');
+                        const codeStr = String(children).replace(/\n$/, '');
+                        if (!props.inline && (codeStr.includes('\n') || lang)) {
+                          return (
+                            <SmartCodeRenderer
+                              lang={lang}
+                              code={codeStr}
+                              onApply={(code) => {
+                                if (activeFile) {
+                                  const updated = (activeFile.content || '') + '\n' + code;
+                                  useStore.getState().updateFileContent(activeFile.id, updated);
+                                  toast.success('Code applied to ' + activeFile.name);
+                                } else {
+                                  toast.error('No file open in editor');
+                                }
+                              }}
+                            />
+                          );
                         }
-                      }}
-                    >{msg.content}</ReactMarkdown>
+                        return <code className="bg-white/[0.08] px-1 py-0.5 rounded text-emerald-400 text-[10px] font-mono" {...props}>{children}</code>;
+                      }
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
 
-                    {/* Quick Reactions / Follow-ups */}
-                    {i === messages.length - 1 && !isLoading && (
-                      <div className="flex flex-wrap gap-2 pt-2 animate-in fade-in slide-in-from-top-2">
-                        {['Explain this', 'Fix bugs', 'Add tests'].map((text) => (
-                          <button
-                            key={text}
-                            onClick={() => {
-                              setInput(text);
-                              handleSend(text.includes('Fix') ? 'build' : (text.includes('tests') ? 'tests' : 'ask'));
-                            }}
-                            className="px-3 py-1 rounded-full bg-white/5 border border-white/5 text-[10px] text-zinc-500 hover:text-emerald-400 hover:bg-emerald-400/5 hover:border-emerald-400/20 transition-all font-medium"
-                          >
-                            {text}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-              }
+                  {/* Quick Reactions / Follow-ups */}
+                  {i === messages.length - 1 && !isLoading && (
+                    <div className="flex flex-wrap gap-2 pt-2 animate-in fade-in slide-in-from-top-2">
+                      {['Explain this', 'Fix bugs', 'Add tests'].map((text) => (
+                        <button
+                          key={text}
+                          onClick={() => {
+                            setInput(text);
+                            handleSend(text.includes('Fix') ? 'build' : (text.includes('tests') ? 'tests' : 'ask'));
+                          }}
+                          className="px-3 py-1 rounded-full bg-white/5 border border-white/5 text-[10px] text-zinc-500 hover:text-emerald-400 hover:bg-emerald-400/5 hover:border-emerald-400/20 transition-all font-medium"
+                        >
+                          {text}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -453,7 +603,7 @@ ${commonRules}`,
 
       <div className={cn(
         "p-4 border-t relative transition-colors",
-        theme === 'dark' ? "bg-[#141414] border-white/5" : "bg-zinc-50 border-zinc-200"
+        theme === 'dark' ? "bg-[#1e1e1e] border-white/5" : "bg-zinc-50 border-zinc-200"
       )}>
         <AnimatePresence>
           {showCommands && (
@@ -544,7 +694,7 @@ ${commonRules}`,
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
             placeholder="Ask anything, @ to mention, / for workflows"
             className={cn(
-              "w-full bg-transparent px-4 pt-3 pb-1 text-[12px] focus:outline-none transition-all resize-none min-h-[50px] max-h-[180px]",
+              "w-full bg-transparent px-4 pt-2.5 pb-1 text-[12px] focus:outline-none transition-all resize-none min-h-[50px] max-h-[180px]",
               theme === 'dark' ? "text-white placeholder:text-zinc-600" : "text-zinc-800 placeholder:text-zinc-400"
             )}
           />
@@ -685,13 +835,13 @@ ${commonRules}`,
                 onClick={() => handleSend()}
                 disabled={isLoading || (!input.trim() && attachments.length === 0)}
                 className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 shrink-0 shadow-lg",
-                  (!input.trim() && attachments.length === 0) 
+                  "w-8 h-8 rounded-lg flex items-center justify-center transition-all active:scale-95 shrink-0 transition-all",
+                  (!input.trim() && attachments.length === 0)
                     ? (theme === 'dark' ? "bg-white/5 text-zinc-600" : "bg-zinc-100 text-zinc-400 cursor-not-allowed")
-                    : (theme === 'dark' ? "bg-white text-black hover:bg-zinc-200 shadow-emerald-500/10" : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/20")
+                    : (theme === 'dark' ? "bg-white text-black hover:bg-zinc-200 shadow-sm" : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm")
                 )}
               >
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4 stroke-[3px]" />}
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-3.5 h-3.5 stroke-[2.5px]" />}
               </button>
             </div>
           </div>

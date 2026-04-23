@@ -33,22 +33,22 @@ export function TopBar({ onEnterLearnMode }: TopBarProps) {
   return (
     <>
       <header className={cn(
-        "h-11 border-b flex items-center justify-between px-6 shrink-0 z-50 transition-colors",
+        "h-[44px] border-b flex items-center justify-between px-4 shrink-0 z-50 transition-colors",
         theme === 'dark' ? "bg-[#1e1e1e] border-white/5" : "bg-white border-zinc-200"
       )}>
-        <div className="flex items-center gap-8">
-          <div className="cursor-pointer" role="button" onClick={() => setCurrentView('dashboard')}>
+        <div className="flex items-center gap-6">
+          <div className="cursor-pointer scale-[0.9] origin-left" role="button" onClick={() => setCurrentView('dashboard')}>
             <LearaLogo size="sm" />
           </div>
 
-          <div className={cn("h-4 w-[1px]", theme === 'dark' ? "bg-white/10" : "bg-zinc-200")} />
+          <div className={cn("h-3.5 w-[1px]", theme === 'dark' ? "bg-white/10" : "bg-zinc-200")} />
 
           <button
             onClick={onEnterLearnMode}
             className={cn(
-              "flex items-center gap-2 px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-[0.2em] transition-all",
+              "flex items-center gap-2 px-3 py-1 rounded-md text-[8px] font-black uppercase tracking-[0.2em] transition-all",
               isLearningActive
-                ? "bg-emerald-500 text-black shadow-xl shadow-emerald-500/20"
+                ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20"
                 : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white border border-white/5"
             )}
           >
@@ -66,16 +66,16 @@ export function TopBar({ onEnterLearnMode }: TopBarProps) {
           </button>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4">
           <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             className={cn(
-              "p-2 rounded-xl transition-all",
+              "p-1.5 rounded-lg transition-all",
               theme === 'dark' ? "hover:bg-white/5 text-zinc-500 hover:text-white" : "hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900"
             )}
             title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
           >
-            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
           </button>
 
           <div className={cn("h-4 w-[1px]", theme === 'dark' ? "bg-white/10" : "bg-zinc-200")} />
@@ -94,7 +94,7 @@ export function TopBar({ onEnterLearnMode }: TopBarProps) {
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <button className={cn(
-                  "w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 overflow-hidden transition-all active:scale-95",
+                  "w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 overflow-hidden transition-all active:scale-95",
                   theme === 'dark' ? "bg-zinc-800 border border-white/5 hover:border-emerald-500/50" : "bg-zinc-100 border border-zinc-200 hover:border-emerald-500/50"
                 )}>
                   {user?.photoURL ? <img src={user.photoURL} alt="Avatar" className="w-full h-full object-cover" /> : <User className="w-4 h-4" />}

@@ -31,14 +31,11 @@ export default function App() {
     sidebarPosition, setSidebarPosition,
     isPreviewOpen, setIsPreviewOpen,
     previewUrl, setUser,
-    sidebarTab, setSidebarTab
+    sidebarTab, setSidebarTab,
+    terminalType, setTerminalType, isTerminalOpen, setIsTerminalOpen
   } = useStore();
 
   const { isAuthReady } = useFirebase();
-
-  useEffect(() => {
-    console.log('App State Check - User:', user ? user.email : 'NULL', 'Ready:', isAuthReady);
-  }, [user, isAuthReady]);
 
   useEffect(() => {
     if (theme === 'light') {
@@ -49,7 +46,7 @@ export default function App() {
       document.body.classList.remove('light');
     }
   }, [theme]);
-  const [isTerminalOpen, setIsTerminalOpen] = useState(true);
+  
   const [terminalHeight, setTerminalHeight] = useState(160);
   const [isResizing, setIsResizing] = useState(false);
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
@@ -72,7 +69,7 @@ export default function App() {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizingAI) return;
       const newWidth = window.innerWidth - e.clientX - 48; // 48 is right toggle bar
-      if (newWidth > 320 && newWidth < 800) {
+      if (newWidth > 310 && newWidth < 800) {
         setAiSidebarWidth(newWidth);
       }
     };
@@ -478,7 +475,7 @@ export default function App() {
           {/* Right Area (Editor & Terminal) */}
           <section className="flex-1 flex flex-col overflow-hidden relative bg-[#1e1e1e]">
             <div className="flex-1 overflow-hidden flex">
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 bg-[#1e1e1e] overflow-hidden">
                 <Editor />
               </div>
 
@@ -546,7 +543,7 @@ export default function App() {
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: aiSidebarWidth, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
-              style={{ minWidth: isAIPanelOpen ? 320 : 0 }}
+              style={{ minWidth: isAIPanelOpen ? 310 : 0 }}
               className="relative border-l border-white/5 bg-[#1e1e1e] flex flex-col z-20 shrink-0"
             >
               {/* Resize Handle */}
@@ -562,38 +559,38 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* Sidebar Toggle Bar - More Minimal */}
-        <div className="w-12 bg-[#111] border-l border-white/5 flex flex-col items-center py-4 gap-4 shrink-0">
+        {/* Sidebar Toggle Bar - Hyper Minimal */}
+        <div className="w-11 bg-[#1e1e1e] border-l border-white/5 flex flex-col items-center py-4 gap-3.5 shrink-0">
           <button 
             onClick={() => setIsAIPanelOpen(!isAIPanelOpen)}
             className={cn(
-              "p-2 rounded-lg transition-all",
+              "p-1.5 rounded-md transition-all",
               isAIPanelOpen ? "bg-emerald-600/20 text-emerald-500 border border-emerald-500/20" : "text-zinc-600 hover:text-white hover:bg-white/5"
             )}
             title="Toggle AI Panel"
           >
-            <PanelRight className="w-5 h-5" />
+            <PanelRight className="w-4 h-4" />
           </button>
-          <button className="p-2 text-zinc-600 hover:text-white hover:bg-white/5 rounded-lg transition-all" title="Extensions">
-            <Layout className="w-5 h-5" />
+          <button className="p-1.5 text-zinc-600 hover:text-white hover:bg-white/5 rounded-md transition-all" title="Extensions">
+            <Layout className="w-4 h-4" />
           </button>
-          <div className="mt-auto flex flex-col gap-4">
+          <div className="mt-auto flex flex-col gap-2.5">
             <button 
               onClick={() => setIsHelpModalOpen(true)}
               className={cn(
-                "p-2 rounded-lg transition-all",
+                "p-1.5 rounded-md transition-all",
                 isHelpModalOpen ? "bg-emerald-600/20 text-emerald-500 border border-emerald-500/20" : "text-zinc-600 hover:text-white hover:bg-white/5"
               )}
               title="Help"
             >
-              <Info className="w-5 h-5" />
+              <Info className="w-4 h-4" />
             </button>
           </div>
         </div>
       </main>
 
-      {/* Status Bar - Ultra Minimal */}
-      <footer className="h-6 bg-[#111] border-t border-white/5 text-zinc-600 flex items-center justify-between px-4 text-[9px] font-bold uppercase tracking-widest shrink-0 select-none">
+      {/* Status Bar - High Density */}
+      <footer className="h-5 bg-[#1e1e1e] border-t border-white/5 text-zinc-600 flex items-center justify-between px-4 text-[8px] font-bold uppercase tracking-widest shrink-0 select-none">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5 hover:text-emerald-500 cursor-pointer transition-colors">
             <div className="w-1 h-1 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.4)]" />

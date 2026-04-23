@@ -11,9 +11,9 @@ import { localStore } from '../lib/storage';
 import { storageService } from '../lib/storageService';
 
 export function FileExplorer() {
-  const { 
-    userId, files, setFiles, addOpenFile, removeOpenFile, setActiveFile, activeFile, 
-    setCurrentView, activeProject, theme, setEditorHighlightQuery, setSidebarTab, modifiedFiles 
+  const {
+    userId, files, setFiles, addOpenFile, removeOpenFile, setActiveFile, activeFile,
+    setCurrentView, activeProject, theme, setEditorHighlightQuery, setSidebarTab, modifiedFiles
   } = useStore();
   const [loading, setLoading] = useState(false);
   const [githubUrl, setGithubUrl] = useState('');
@@ -30,18 +30,18 @@ export function FileExplorer() {
     try {
       const pathParam = activeProject?.folderName ? `&path=${activeProject.folderName}` : '';
       const res = await axios.get(`/api/files?userId=${userId}${pathParam}`);
-      
+
       // If server returns empty but we have an active project, try to restore
       if (res.data.length === 0 && activeProject?.id) {
         console.log('Server workspace empty, attempting restore...');
-        
+
         // 1. Try Local Storage first (Free and Fast)
         const localFiles = await localStore.getProjectFiles(activeProject.id);
         if (localFiles.length > 0) {
           console.log('Restoring from Local Storage (IndexedDB)...');
-          await axios.post('/api/files/sync', { 
-            userId, 
-            files: localFiles.map(f => ({ path: f.path, content: f.content, type: f.type })) 
+          await axios.post('/api/files/sync', {
+            userId,
+            files: localFiles.map(f => ({ path: f.path, content: f.content, type: f.type }))
           });
           const retryRes = await axios.get(`/api/files?userId=${userId}${pathParam}`);
           setFiles(retryRes.data);
@@ -53,14 +53,14 @@ export function FileExplorer() {
           console.log('Local storage empty, attempting restore from Firestore...');
           const filesRef = collection(db, 'projects', activeProject.id, 'files');
           const snapshot = await getDocs(filesRef);
-          
+
           if (!snapshot.empty) {
             const backupFiles = snapshot.docs.map(doc => doc.data());
-            await axios.post('/api/files/sync', { 
-              userId, 
-              files: backupFiles.map(f => ({ path: f.path, content: f.content, type: f.type })) 
+            await axios.post('/api/files/sync', {
+              userId,
+              files: backupFiles.map(f => ({ path: f.path, content: f.content, type: f.type }))
             });
-            
+
             // Also save to local storage for next time
             for (const f of backupFiles) {
               await localStore.saveFile(activeProject.id, {
@@ -77,7 +77,7 @@ export function FileExplorer() {
           }
         }
       }
-      
+
       setFiles(res.data);
     } catch (err) {
       console.error('Failed to fetch files:', err);
@@ -229,7 +229,7 @@ export function FileExplorer() {
             <div className="w-4 flex justify-center">
               {creating.type === 'directory' ? <Folder className="w-4 h-4 text-emerald-400" /> : <File className="w-4 h-4 text-emerald-500" />}
             </div>
-            <input 
+            <input
               autoFocus
               id={`new-${creating.type}`}
               name="newName"
@@ -255,7 +255,7 @@ export function FileExplorer() {
             <div key={node.id}>
               <ContextMenu.Root>
                 <ContextMenu.Trigger>
-                  <div 
+                  <div
                     role="button"
                     className={cn(
                       "flex items-center gap-2 px-2 py-1.5 hover:bg-[#2a2d2e] cursor-pointer transition-all active:scale-[0.98] group rounded-md mx-1",
@@ -313,13 +313,13 @@ export function FileExplorer() {
                     {!isRenaming && (
                       <div className="hidden group-hover:flex items-center gap-1 shrink-0">
                         {node.type === 'directory' && (
-                          <button 
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setCreating({ type: 'file', parent: node.id });
                               if (!expanded.has(node.id)) toggleExpand(node.id);
-                            }} 
-                            className="p-1 hover:bg-[#3c3c3c] rounded transition-colors" 
+                            }}
+                            className="p-1 hover:bg-[#3c3c3c] rounded transition-colors"
                             title="New File"
                           >
                             <Plus className="w-3 h-3" />
@@ -333,22 +333,22 @@ export function FileExplorer() {
                 </ContextMenu.Trigger>
                 <ContextMenu.Portal>
                   <ContextMenu.Content className="min-w-[160px] bg-[#252526] border border-[#454545] rounded-md p-1 shadow-xl z-50">
-                    <ContextMenu.Item 
+                    <ContextMenu.Item
                       onClick={() => {
                         const targetId = node.type === 'directory' ? node.id : (parentId || '');
                         setCreating({ type: 'file', parent: targetId });
                         if (node.type === 'directory' && !expanded.has(node.id)) toggleExpand(node.id);
-                      }} 
+                      }}
                       className="flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-300 hover:bg-emerald-600 hover:text-white rounded cursor-pointer outline-none"
                     >
                       <Plus className="w-3.5 h-3.5" /> New File
                     </ContextMenu.Item>
-                    <ContextMenu.Item 
+                    <ContextMenu.Item
                       onClick={() => {
                         const targetId = node.type === 'directory' ? node.id : (parentId || '');
                         setCreating({ type: 'directory', parent: targetId });
                         if (node.type === 'directory' && !expanded.has(node.id)) toggleExpand(node.id);
-                      }} 
+                      }}
                       className="flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-300 hover:bg-emerald-600 hover:text-white rounded cursor-pointer outline-none"
                     >
                       <FolderPlus className="w-3.5 h-3.5" /> New Folder
@@ -375,11 +375,11 @@ export function FileExplorer() {
 
   return (
     <div className="flex flex-col h-full bg-[#1e1e1e] text-[#cccccc] select-none">
-      <div className="h-8 flex items-center justify-between px-4 border-b border-white/5 bg-[#111]">
+      <div className="h-9 flex items-center justify-between px-3 border-b border-white/5 bg-[#1e1e1e] shrink-0">
         {isSearching ? (
           <div className="flex-1 flex items-center gap-2">
             <Search className="w-3 h-3 text-emerald-500" />
-            <input 
+            <input
               autoFocus
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -392,7 +392,7 @@ export function FileExplorer() {
               placeholder="Filter files..."
               className="bg-transparent border-none outline-none text-[10px] w-full font-bold uppercase tracking-wider text-white placeholder:text-zinc-700"
             />
-            <button 
+            <button
               onClick={() => {
                 setIsSearching(false);
                 setSearchQuery('');
@@ -405,7 +405,7 @@ export function FileExplorer() {
         ) : (
           <>
             <div className="flex-1 flex items-center gap-2 group min-w-0 mr-2">
-              <button 
+              <button
                 onClick={() => setCurrentView('dashboard')}
                 className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white shrink-0"
                 title="Go to Dashboard"
@@ -415,30 +415,30 @@ export function FileExplorer() {
               <span className="font-bold uppercase text-[10px] tracking-wider text-zinc-400 truncate">Explorer</span>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              <button 
-                onClick={() => setCreating({ type: 'file', parent: activeProject?.folderName || '' })} 
-                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white shrink-0" 
+              <button
+                onClick={() => setCreating({ type: 'file', parent: activeProject?.folderName || '' })}
+                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white shrink-0"
                 title="New File"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
-              <button 
-                onClick={() => setCreating({ type: 'directory', parent: activeProject?.folderName || '' })} 
-                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white shrink-0" 
+              <button
+                onClick={() => setCreating({ type: 'directory', parent: activeProject?.folderName || '' })}
+                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white shrink-0"
                 title="New Folder"
               >
                 <FolderPlus className="w-3.5 h-3.5" />
               </button>
-              <button 
-                onClick={() => setSidebarTab('search')} 
-                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white shrink-0" 
+              <button
+                onClick={() => setSidebarTab('search')}
+                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white shrink-0"
                 title="Search Workspace"
               >
                 <Search className="w-3.5 h-3.5" />
               </button>
-              <button 
-                onClick={() => fetchFiles()} 
-                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white shrink-0" 
+              <button
+                onClick={() => fetchFiles()}
+                className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-white shrink-0"
                 title="Refresh"
               >
                 <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
@@ -453,7 +453,7 @@ export function FileExplorer() {
           <div className="space-y-0">
             {searchResults.length > 0 ? (
               searchResults.map((res, idx) => (
-                <div 
+                <div
                   key={idx}
                   onClick={() => {
                     openFile(res.node);
@@ -497,7 +497,7 @@ export function FileExplorer() {
           <>
             {activeProject ? (
               <div className="mx-1">
-                <div 
+                <div
                   className={cn(
                     "flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 cursor-pointer transition-colors group rounded-md",
                     projectExpanded ? "text-white" : "text-zinc-500"

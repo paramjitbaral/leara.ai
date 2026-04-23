@@ -281,7 +281,7 @@ export function LearningMode({ activeFile, onClose, onOpenSettings }: LearningMo
           <section className="space-y-4">
             <h4 className="text-[11px] font-bold uppercase tracking-widest text-emerald-400">Step 2: Tasks</h4>
             <ul className="space-y-3">
-              {currentStep.tasks.map((task, i) => (
+              {currentStep?.tasks?.map((task, i) => (
                 <li key={i} className="flex gap-3 text-sm text-zinc-300">
                   <span className="w-5 h-5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold flex items-center justify-center border border-emerald-500/20 shrink-0">
                     {i + 1}

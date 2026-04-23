@@ -5,30 +5,48 @@ import { useStore } from "../store";
 
 async function callAI(prompt: string, systemInstruction: string, context: any = {}): Promise<string> {
   const { aiProvider, userApiKey, aiModel, aiEndpoint, providerKeys } = useStore.getState();
-  
   const activeKey = providerKeys[aiProvider] || userApiKey;
 
-  const response = await fetch('/api/ai/copilot', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      prompt, 
-      context, 
-      provider: aiProvider, 
-      apiKey: activeKey,
-      model: aiModel,
-      endpoint: aiEndpoint,
-      systemInstruction: `You are a minimalist coding mentor.
-    - Adapt response length to query. If user says 'hi/hello', respond in ONE SENTENCE.
-    - Be extremely concise. Use technical bullet points.
-    - Prioritize speed and direct answers.
-    - Do not over-explain basic concepts unless asked.`
-    })
-  });
+  let attempts = 0;
+  const MAX_ATTEMPTS = 3;
 
-  const data = await response.json();
-  if (data.error) throw new Error(data.error);
-  return data.response;
+  while (attempts < MAX_ATTEMPTS) {
+    try {
+      const response = await fetch('/api/ai/copilot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          prompt, 
+          context, 
+          provider: aiProvider, 
+          apiKey: activeKey,
+          model: aiModel,
+          endpoint: aiEndpoint,
+          systemInstruction: systemInstruction || `You are a minimalist coding mentor.
+        - Adapt response length to query. If user says 'hi/hello', respond in ONE SENTENCE.
+        - Be extremely concise. Use technical bullet points.
+        - Prioritize speed and direct answers.
+        - Do not over-explain basic concepts unless asked.`
+        })
+      });
+
+      const data = await response.json();
+      if (data.error) {
+        if (data.error.includes('quota') || data.error.includes('429')) {
+          attempts++;
+          await new Promise(r => setTimeout(r, 1000 * attempts)); // Backoff
+          continue;
+        }
+        throw new Error(data.error);
+      }
+      return data.response;
+    } catch (err: any) {
+      attempts++;
+      if (attempts >= MAX_ATTEMPTS) throw err;
+      await new Promise(r => setTimeout(r, 500 * attempts));
+    }
+  }
+  throw new Error("AI call failed after retries");
 }
 
 async function getCache(hash: string): Promise<any | null> {
@@ -68,6 +86,40 @@ function generateHash(str: string): string {
   return hash.toString();
 }
 
+function extractJSON(text: string): any {
+  // Try to find content between first { and last }
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  
+  if (start !== -1) {
+    const effectiveEnd = end !== -1 ? end + 1 : text.length;
+    let jsonStr = text.substring(start, effectiveEnd);
+
+    // Auto-Repair: If it ends abruptly, try to close it
+    if (end === -1 || !jsonStr.endsWith('}')) {
+      console.warn("Auto-repairing truncated JSON...");
+      // Count open vs close braces
+      const opens = (jsonStr.match(/\{/g) || []).length;
+      const closes = (jsonStr.match(/\}/g) || []).length;
+      if (opens > closes) {
+        jsonStr += '}'.repeat(opens - closes);
+      }
+    }
+
+    try {
+      return JSON.parse(jsonStr);
+    } catch (e) {
+      // Last resort: clean markdown
+      const clean = jsonStr.replace(/```json\n?|\n?```/g, '').trim();
+      try { return JSON.parse(clean); } catch (e2) {
+        throw new Error("Could not parse AI response as JSON");
+      }
+    }
+  }
+  
+  throw new Error("No JSON object found in AI response");
+}
+
 export async function explainCode(code: string, language: string): Promise<Explanation> {
   const hash = generateHash(`explain-v2-${language}-${code}`);
   const cached = await getCache(hash);
@@ -96,7 +148,7 @@ export async function explainCode(code: string, language: string): Promise<Expla
     { language, code }
   );
   
-  const explanation = JSON.parse(text.replace(/```json\n?|\n?```/g, '').trim() || '{}');
+  const explanation = extractJSON(text);
   await setCache(hash, { explanation });
   return explanation;
 }
@@ -113,7 +165,8 @@ export async function generateExercises(code: string, language: string, isStrugg
     { language, code, isStruggling }
   );
   
-  const exercises = JSON.parse(text.replace(/```json\n?|\n?```/g, '').trim() || '[]');
+  const raw = extractJSON(text);
+  const exercises = Array.isArray(raw) ? raw : (raw.exercises || []);
   await setCache(hash, { exercises });
   return exercises;
 }
@@ -125,7 +178,7 @@ export async function validateAnswer(question: string, userCode: string, solutio
         `Evaluate equivalence. Return ONLY JSON: { "correct": boolean, "feedback": "string" }`,
         { question, userCode, solution }
     );
-    return JSON.parse(text.replace(/```json\n?|\n?```/g, '').trim());
+    return extractJSON(text);
   } catch (err: any) {
     return { correct: false, feedback: "Evaluation failed." };
   }
@@ -134,24 +187,43 @@ export async function validateAnswer(question: string, userCode: string, solutio
 export async function generateInitialLearningStep(content: string, language: string): Promise<{ sessionInfo: { title: string, description: string }, firstStep: LearningStep }> {
   const text = await callAI(
     `Full Code:\n${content}`,
-    `Create the FIRST step of a "build from scratch" coding lesson. 
+    `You are "Professor Leara", a gentle and extremely patient coding teacher for absolute beginners.
+    
+    YOUR PEDAGOGY:
+    1. THE ANALOGY: Start the lesson with a real-world analogy (e.g. "Think of a variable like a labeled box").
+    2. THE "WHY": Explain why we need this specific part of the code in simple words. 
+    3. THE DISCOVERY: Ask the student to do ONE tiny thing (e.g. "Change the word 'Hello' to your name").
+    
+    STEP 1 FOCUS:
+    - Only look at the first 3-5 lines.
+    - If it's HTML, teach what <!DOCTYPE> or <html> means using a "Greeting/Handshake" analogy.
+    - If it's JS, teach what a comment or 'const' means.
+    
     Return ONLY JSON:
     {
       "sessionInfo": { "title": "string", "description": "string" },
       "firstStep": { 
-        "id": "step1", "title": "string", "goal": "string", "expectedOutput": "string", 
-        "tasks": string[], "partialCode": "string", "solution": "string", "hint": "string", "validationLogic": "string" 
+        "id": "step1", "title": "string", "goal": "string (Start with Analogy, then Explain, then the Goal)", "expectedOutput": "string", 
+        "tasks": ["ONE tiny action only"], "partialCode": "string (The actual file content but with ONE small placeholder)", "solution": "string", "hint": "string", "validationLogic": "string" 
       }
     }`,
     { language, content }
   );
-  return JSON.parse(text.replace(/```json\n?|\n?```/g, '').trim());
+  return extractJSON(text);
 }
 
 export async function generateRemainingLearningSteps(content: string, language: string, title: string): Promise<{ steps: LearningStep[], finalExplanation: string, understandingCheck: string, practiceProblem: any }> {
   const text = await callAI(
     `Code:\n${content}`,
-    `Generate steps 2-5 for the lesson "${title}".
+    `You are Professor Leara. Continue the lesson "${title}".
+    
+    RULES FOR STEPS 2-10:
+    1. ONE CONCEPT PER STEP: Do not mix imports with logic.
+    2. TEACH BEFORE TASK: The 'goal' field MUST contain a 2-3 sentence 'teacher's explanation' of the NEW part being introduced.
+    3. SCAFFOLDING: Keep the previous code visible. Only the NEW target part should be a // TODO: or <!-- TODO: -->.
+    4. NO OVERWHELM: If a task is too big, break it into two steps.
+    5. HTML SAFETY: If writing in HTML, ensure students wrap JS in <script> tags or suggest they only edit existing tags.
+    
     Return ONLY JSON:
     {
       "steps": Array<LearningStep>,
@@ -161,5 +233,5 @@ export async function generateRemainingLearningSteps(content: string, language: 
     }`,
     { language, content, title }
   );
-  return JSON.parse(text.replace(/```json\n?|\n?```/g, '').trim());
+  return extractJSON(text);
 }

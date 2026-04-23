@@ -10,6 +10,11 @@ import { spawn } from "child_process";
 import http from "http";
 import os from "os";
 import OpenAI from "openai";
+import * as pty from "node-pty";
+
+import { exec } from "child_process";
+import { promisify } from "util";
+const execAsync = promisify(exec);
 
 dotenv.config();
 
@@ -533,6 +538,35 @@ app.post("/api/ai/copilot", async (req, res) => {
   }
 });
 
+app.post("/api/terminal/exec", async (req, res) => {
+  const { command, userId, folder } = req.body;
+  const userRoot = path.join(WORKSPACE_ROOT, userId || "local-user");
+  const userPath = folder ? path.join(userRoot, folder) : userRoot;
+
+  if (!fs.existsSync(userPath)) {
+    return res.status(404).json({ error: "Working directory not found" });
+  }
+
+  console.log(`[AI-TOOL] Executing: ${command} in ${userPath}`);
+  
+  try {
+    const { stdout, stderr } = await execAsync(command, {
+      cwd: userPath,
+      env: { ...process.env, HOME: userRoot, USERPROFILE: userRoot },
+      encoding: 'utf8',
+      maxBuffer: 1024 * 1024 // 1MB
+    });
+    res.json({ stdout, stderr, success: true });
+  } catch (err: any) {
+    res.json({ 
+      stdout: err.stdout || "", 
+      stderr: err.stderr || err.message, 
+      success: false,
+      exitCode: err.code
+    });
+  }
+});
+
 // --- Terminal Integration ---
 async function startServer() {
   const server = http.createServer(app);
@@ -555,34 +589,58 @@ async function startServer() {
 
     const isWindows = process.platform === "win32";
     const shell = isWindows ? "powershell.exe" : (process.env.SHELL || "bash");
-    const args = isWindows ? ["-NoLogo", "-ExecutionPolicy", "Bypass"] : ["-i"];
-
-    console.log(`[TERMINAL] Spawning ${shell} in ${userPath}`);
     
-    const shellProcess = spawn(shell, args, {
+    // Create actual PTY session
+    const ptyProcess = pty.spawn(shell, isWindows ? [] : ["-i"], {
+      name: "xterm-256color",
+      cols: 80,
+      rows: 24,
       cwd: userPath,
       env: { 
         ...process.env, 
         HOME: userRoot,
         USERPROFILE: userRoot,
         TERM: "xterm-256color" 
-      },
-      shell: true,
-      stdio: ["pipe", "pipe", "pipe"]
+      }
     });
 
-    shellProcess.stdout.on("data", (data) => ws.send(data.toString()));
-    shellProcess.stderr.on("data", (data) => ws.send(data.toString()));
+    console.log(`[PTY] Session started: ${shell} in ${userPath}`);
+
+    ptyProcess.onData(data => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+      }
+    });
 
     ws.on("message", (message) => {
-      shellProcess.stdin.write(message.toString());
+      const data = message.toString();
+      
+      // Control Signal Trap: Intercept PTY resizes before they touch stdin
+      if (data.startsWith("__resize__:")) {
+        try {
+          const json = JSON.parse(data.split("__resize__:")[1]);
+          if (json.cols && json.rows) {
+            ptyProcess.resize(json.cols, json.rows);
+            return; // EXIT: Do not pass this to the shell
+          }
+        } catch (e) {
+          console.error("[PTY] Resize trap failed:", e);
+        }
+      }
+
+      // User Data: Pass regular keystrokes/commands to the active pty
+      ptyProcess.write(data);
     });
 
-    ws.on("close", () => shellProcess.kill());
-    shellProcess.on("exit", () => ws.close());
-    shellProcess.on("error", (err) => {
-      ws.send(`\r\n\x1b[31mFailed to start shell: ${err.message}\x1b[0m\r\n`);
-      ws.close();
+    ws.on("close", () => {
+      console.log(`[PTY] Session closed`);
+      ptyProcess.kill();
+    });
+
+    ptyProcess.onExit(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
     });
   });
 

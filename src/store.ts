@@ -129,6 +129,21 @@ interface AppState {
   editorScrollLine: number | null;
   setEditorScrollLine: (line: number | null) => void;
 
+  chatHistories: Record<string, any[]>;
+  setProjectMessages: (projectId: string, messages: any[]) => void;
+  clearProjectMessages: (projectId: string) => void;
+
+  isTerminalOpen: boolean;
+  setIsTerminalOpen: (open: boolean) => void;
+  terminalCommand: string | null;
+  setTerminalCommand: (command: string | null) => void;
+  
+  terminals: { id: string; type: 'server' | 'browser'; name: string }[];
+  activeTerminalId: string | null;
+  addTerminal: (type?: 'server' | 'browser') => void;
+  removeTerminal: (id: string) => void;
+  setActiveTerminalId: (id: string) => void;
+
   updateFileContent: (fileId: string, content: string) => void;
 }
 
@@ -367,4 +382,42 @@ export const useStore = create<AppState>((set) => ({
       modifiedFiles: new Set([...state.modifiedFiles, fileId])
     };
   }),
+
+  chatHistories: {},
+  setProjectMessages: (projectId, messages) => set((state) => ({
+    chatHistories: { ...state.chatHistories, [projectId]: messages }
+  })),
+  clearProjectMessages: (projectId) => set((state) => ({
+    chatHistories: { ...state.chatHistories, [projectId]: [] }
+  })),
+
+  isTerminalOpen: true,
+  setIsTerminalOpen: (open) => set({ isTerminalOpen: open }),
+  terminalCommand: null,
+  setTerminalCommand: (command) => set({ terminalCommand: command }),
+
+  terminals: [{ id: 'term-1', type: 'server', name: 'bash' }],
+  activeTerminalId: 'term-1',
+  addTerminal: (type = 'server') => set((state) => {
+    const id = `term-${Date.now()}`;
+    const newTerminal = { id, type, name: type === 'server' ? 'bash' : 'jsh' };
+    return {
+      terminals: [...state.terminals, newTerminal],
+      activeTerminalId: id,
+      isTerminalOpen: true
+    };
+  }),
+  removeTerminal: (id) => set((state) => {
+    const newTerminals = state.terminals.filter(t => t.id !== id);
+    let newActiveId = state.activeTerminalId;
+    if (newActiveId === id) {
+      newActiveId = newTerminals.length > 0 ? newTerminals[newTerminals.length - 1].id : null;
+    }
+    return {
+      terminals: newTerminals,
+      activeTerminalId: newActiveId,
+      isTerminalOpen: newTerminals.length > 0
+    };
+  }),
+  setActiveTerminalId: (id) => set({ activeTerminalId: id }),
 }));

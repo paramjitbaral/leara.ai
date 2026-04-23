@@ -245,7 +245,7 @@ export function Editor() {
           onMount={handleEditorDidMount}
           onChange={handleEditorChange}
           options={{
-            fontSize: 14,
+            fontSize: 13,
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
             minimap: { enabled: false },
             scrollBeyondLastLine: false,

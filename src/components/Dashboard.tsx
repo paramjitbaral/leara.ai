@@ -450,7 +450,7 @@ export const Dashboard: React.FC = () => {
     )}>
       {/* Sidebar - Minimalist & Sleek */}
       <aside className={cn(
-        "w-20 lg:w-64 border-r flex flex-col shrink-0 transition-all duration-300 h-full overflow-hidden",
+        "w-20 lg:w-52 border-r flex flex-col shrink-0 transition-all duration-300 h-full overflow-hidden",
         theme === 'dark' ? "bg-[#0a0a0a] border-white/5" : "bg-white border-zinc-100"
       )}>
         {/* Header - Fixed */}
@@ -464,12 +464,12 @@ export const Dashboard: React.FC = () => {
             <button
               onClick={() => setActiveTab('home')}
               className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group",
+                "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all group",
                 activeTab === 'home' ? "text-emerald-400 bg-emerald-500/10" : "text-zinc-500 hover:text-white hover:bg-white/5"
               )}
             >
-              <Home className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <span className="hidden lg:block text-sm font-medium">Home</span>
+              <Home className="w-4.5 h-4.5 group-hover:scale-110 transition-transform" />
+              <span className="hidden lg:block text-[13px] font-medium tracking-tight">Home</span>
             </button>
             <button
               onClick={() => setActiveTab('dashboard')}
@@ -532,17 +532,17 @@ export const Dashboard: React.FC = () => {
           </div>
         </nav>
 
-        {/* Footer - Pinned to bottom */}
-        <div className="p-4 pb-4 border-t border-white/5 space-y-2 shrink-0">
+        {/* Footer - High-Density Minimalist */}
+        <div className="p-2 pb-3 border-t border-white/5 space-y-0.5 shrink-0">
           <button
             onClick={() => setActiveTab('settings')}
             className={cn(
-              "w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all group",
+              "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-all group",
               activeTab === 'settings' ? "text-emerald-400 bg-emerald-500/10" : "text-zinc-500 hover:text-white hover:bg-white/5"
             )}
           >
-            <Settings className="w-5 h-5 group-hover:rotate-45 transition-transform" />
-            <span className="hidden lg:block text-sm font-medium">Settings</span>
+            <Settings className="w-4 h-4 group-hover:rotate-45 transition-transform" />
+            <span className="hidden lg:block text-xs font-medium">Settings</span>
           </button>
           <button
             onClick={() => {
@@ -552,31 +552,31 @@ export const Dashboard: React.FC = () => {
                 window.location.reload();
               }
             }}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all group text-zinc-500 hover:text-red-400 hover:bg-red-500/5 active:scale-95"
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-all group text-zinc-500 hover:text-red-400 hover:bg-red-500/5 active:scale-95"
           >
-            <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-            <span className="hidden lg:block text-sm font-medium">Logout</span>
+            <LogOut className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+            <span className="hidden lg:block text-xs font-medium">Logout</span>
           </button>
           {user?.uid === 'local-desktop-user' ? (
             <button
               onClick={() => signIn(false)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black rounded-xl transition-all group shadow-lg shadow-emerald-500/20 active:scale-95"
+              className="w-full flex items-center gap-2.5 px-2.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-black rounded-lg transition-all group mt-1.5 active:scale-95 shadow-sm"
             >
-              <LogIn className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <span className="hidden lg:block text-xs font-black uppercase tracking-widest">Sign Up</span>
+              <LogIn className="w-4 h-4 group-hover:scale-110 transition-transform" />
+              <span className="hidden lg:block text-[10px] font-black uppercase tracking-widest">Sign Up</span>
             </button>
           ) : (
-            <div className="flex items-center gap-3 px-3 py-2.5 bg-white/5 rounded-xl border border-white/5 mt-2 mb-1">
-              <div className="w-8 h-8 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+            <div className="flex items-center gap-2.5 px-2.5 py-1.5 bg-white/[0.02] rounded-lg border border-white/5 mt-1.5">
+              <div className="w-7 h-7 rounded-lg bg-zinc-800 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
                 {user?.photoURL ? (
                   <img src={user.photoURL} alt="User Profile" className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />
                 ) : (
-                  <User className="w-4 h-4 text-zinc-500" />
+                  <User className="w-3.5 h-3.5 text-zinc-600" />
                 )}
               </div>
-              <div className="hidden lg:flex flex-col min-w-0 pr-4">
-                <span className="text-xs font-bold text-white truncate">{user?.displayName || 'User'}</span>
-                <span className="text-[10px] text-zinc-500 truncate">{user?.email || 'user@example.com'}</span>
+              <div className="hidden lg:flex flex-col min-w-0 pr-2">
+                <span className="text-[11px] font-bold text-white truncate">{user?.displayName || 'User'}</span>
+                <span className="text-[9px] text-zinc-600 truncate">{user?.email || 'user@example.com'}</span>
               </div>
             </div>
           )}
@@ -587,55 +587,91 @@ export const Dashboard: React.FC = () => {
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className={cn(
-          "h-20 border-b flex items-center justify-between px-8 backdrop-blur-xl z-10",
-          theme === 'dark' ? "bg-[#080808]/80 border-white/5" : "bg-white/80 border-zinc-100"
+          "h-16 border-b flex items-center justify-between px-8 z-10 shrink-0",
+          theme === 'dark' ? "bg-[#080808] border-white/5" : "bg-white border-zinc-100 shadow-sm"
         )}>
-          <div className="flex flex-col">
-            <h1 className={cn(
-              "text-xl font-bold tracking-tight",
-              theme === 'dark' ? "text-white" : "text-zinc-900"
-            )}>
-              {activeTab === 'home' && 'Welcome Home'}
-              {activeTab === 'dashboard' && 'Workspace Dashboard'}
-              {activeTab === 'projects' && 'All Projects'}
-              {activeTab === 'favorites' && 'Favorite Projects'}
-              {activeTab === 'settings' && 'Settings'}
-            </h1>
-            <p className="text-xs text-zinc-500">
-              {activeTab === 'home' && 'Your personalized coding space'}
-              {activeTab === 'dashboard' && 'Manage your local development environments'}
-              {activeTab === 'projects' && 'Browse and organize your entire codebase'}
-              {activeTab === 'favorites' && 'Quick access to your most important work'}
-              {activeTab === 'settings' && 'Manage your account and preferences'}
-            </p>
-          </div>
           <div className="flex items-center gap-4">
+            <div className={cn(
+              "p-2 rounded-lg transition-colors",
+              theme === 'dark' ? "bg-white/5 text-zinc-400 group-hover:text-emerald-500" : "bg-zinc-50 text-zinc-500 border border-zinc-200/50"
+            )}>
+              {activeTab === 'home' && <LayoutDashboard className="w-4 h-4" />}
+              {activeTab === 'dashboard' && <Cpu className="w-4 h-4" />}
+              {activeTab === 'projects' && <FolderOpen className="w-4 h-4" />}
+              {activeTab === 'favorites' && <Sparkles className="w-4 h-4" />}
+              {activeTab === 'settings' && <Settings className="w-4 h-4" />}
+            </div>
+            <div className="flex flex-col">
+              <h1 className={cn(
+                "text-[15px] font-bold tracking-tight leading-none mb-1",
+                theme === 'dark' ? "text-white" : "text-zinc-900"
+              )}>
+                {activeTab === 'home' && 'Workspace Home'}
+                {activeTab === 'dashboard' && 'Active Environments'}
+                {activeTab === 'projects' && 'Source Explorer'}
+                {activeTab === 'favorites' && 'Pinned Projects'}
+                {activeTab === 'settings' && 'System Preferences'}
+              </h1>
+              <p className={cn(
+                "text-[11px] font-medium opacity-80",
+                theme === 'dark' ? "text-zinc-500" : "text-zinc-400"
+              )}>
+                {activeTab === 'home' && 'Central Control'}
+                {activeTab === 'dashboard' && 'Manage your local playgrounds'}
+                {activeTab === 'projects' && 'Browse repositories'}
+                {activeTab === 'favorites' && 'Quick access'}
+                {activeTab === 'settings' && 'Configure workspace'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              "flex items-center rounded-lg px-4 py-2 transition-all w-48 md:w-64",
+              theme === 'dark' ? "bg-white/5" : "bg-zinc-100"
+            )}>
+              <Search className="w-3.5 h-3.5 text-zinc-500" />
+              <input 
+                type="text" 
+                placeholder="Find a playground..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-transparent border-none outline-none text-[11px] ml-2 w-full placeholder:text-zinc-500 dark:text-white text-zinc-900"
+              />
+            </div>
+
+            <div className={cn("w-px h-4 mx-1", theme === 'dark' ? "bg-white/10" : "bg-zinc-200")} />
+
             <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               className={cn(
-                "p-2.5 border rounded-full transition-all",
-                theme === 'dark' ? "bg-white/5 border-white/10 text-zinc-400 hover:text-white" : "bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900 shadow-sm"
+                "p-2 rounded-lg transition-all",
+                theme === 'dark' 
+                  ? "hover:bg-white/5 text-zinc-400 hover:text-white" 
+                  : "hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900"
               )}
-              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
             >
-              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
             </button>
 
             <button
               onClick={() => setIsCreateDialogOpen(true)}
               className={cn(
-                "p-2.5 border rounded-full transition-all",
-                theme === 'dark' ? "bg-white/5 border-white/10 text-zinc-400 hover:text-white" : "bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900 shadow-sm"
+                "flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-[11px] font-bold",
+                theme === 'dark' 
+                  ? "bg-white text-black hover:bg-zinc-200" 
+                  : "bg-zinc-900 text-white hover:bg-zinc-800"
               )}
             >
-              <PlusCircle className="w-5 h-5" />
+              <Plus className="w-3.5 h-3.5" />
+              New Playground
             </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 space-y-10">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {activeTab === 'home' && (
-            <div className="space-y-10">
+            <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {isLoading && projects.length === 0
                   ? [1, 2, 3, 4].map((i) => <StatSkeleton key={i} theme={theme} />)
@@ -649,22 +685,22 @@ export const Dashboard: React.FC = () => {
                       key={i}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.1 }}
+                       transition={{ delay: i * 0.1 }}
                       className={cn(
-                        "border rounded-2xl p-6 transition-all",
+                        "border rounded-xl p-5 transition-all text-left",
                         theme === 'dark' ? "bg-[#111] border-white/5 hover:border-white/10" : "bg-white border-zinc-100 shadow-sm hover:shadow-md"
                       )}
                     >
                       <div className={cn(
-                        "w-10 h-10 rounded-xl flex items-center justify-center mb-4",
+                        "w-9 h-9 rounded-lg flex items-center justify-center mb-3",
                         stat.color === 'emerald' ? "bg-emerald-500/10 text-emerald-500" : "bg-yellow-500/10 text-yellow-500"
                       )}>
-                        <stat.icon className="w-5 h-5" />
+                        <stat.icon className="w-4.5 h-4.5" />
                       </div>
-                      <h4 className="text-zinc-500 text-xs font-bold uppercase tracking-wider">{stat.title}</h4>
+                      <h4 className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">{stat.title}</h4>
                       <p className={cn(
                         "mt-1",
-                        typeof stat.count === 'string' && stat.count.length > 10 ? "text-base font-semibold opacity-70 mt-3" : "text-2xl font-bold",
+                        typeof stat.count === 'string' && stat.count.length > 10 ? "text-sm font-semibold opacity-70 mt-2" : "text-xl font-bold",
                         theme === 'dark' ? "text-white" : "text-zinc-900"
                       )}>{stat.count}</p>
                     </motion.div>
@@ -703,32 +739,50 @@ export const Dashboard: React.FC = () => {
               {activeTab === 'dashboard' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <motion.div
-                    whileHover={{ y: -4 }}
+                    whileHover={{ y: -2 }}
                     onClick={() => setIsCreateDialogOpen(true)}
                     className={cn(
-                      "lg:col-span-2 border rounded-2xl p-8 flex flex-col justify-between group cursor-pointer relative overflow-hidden transition-all",
-                      theme === 'dark' ? "bg-emerald-500/5 border-emerald-500/20" : "bg-[#e8fbf3] border-emerald-100"
+                      "lg:col-span-2 border rounded-2xl p-8 flex flex-col lg:flex-row justify-between group cursor-pointer relative overflow-hidden transition-all duration-300",
+                      theme === 'dark' 
+                        ? "bg-[#0a0a0a] border-white/5" 
+                        : "bg-white border-zinc-100 shadow-sm"
                     )}
                   >
-                    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                      <Code2 className="w-48 h-48 rotate-12" />
+                    {/* Background Pattern */}
+                    <div className="absolute inset-0 opacity-[0.02] pointer-events-none bg-[radial-gradient(#10b981_0.5px,transparent_0.5px)] [background-size:16px_16px]" />
+
+                    <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-all duration-700 group-hover:rotate-6 group-hover:scale-110">
+                      <Code2 className="w-56 h-56" />
                     </div>
-                    <div className="space-y-4 relative z-10">
-                      <div className="w-14 h-14 bg-emerald-500 rounded-xl flex items-center justify-center text-white shadow-xl shadow-emerald-500/30">
-                        <Plus className="w-8 h-8" />
+
+                    <div className="flex-1 space-y-6 relative z-10">
+                      <div className={cn(
+                        "w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300",
+                        theme === 'dark' ? "bg-white/5 text-emerald-500 border border-white/10" : "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                      )}>
+                        <Plus className="w-6 h-6" />
                       </div>
-                      <div>
+                      <div className="space-y-1.5">
                         <h2 className={cn(
-                          "text-3xl font-bold tracking-tight",
+                          "text-2xl font-bold tracking-tight",
                           theme === 'dark' ? "text-white" : "text-zinc-900"
-                        )}>Create New Playground</h2>
-                        <p className="text-zinc-500 mt-2 max-w-md font-medium leading-relaxed">Launch a fresh environment with your favorite tech stack in seconds.</p>
+                        )}>
+                          Create New <span className="text-emerald-500">Playground</span>
+                        </h2>
+                        <p className="text-zinc-500 max-w-sm font-medium leading-relaxed text-[13px]">
+                          Launch high-performance environments for your favorite tech stack in seconds.
+                        </p>
                       </div>
-                    </div>
-                    <div className="mt-8 flex items-center gap-4 relative z-10">
-                      <button className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-xl transition-all flex items-center gap-2">
-                        Get Started <ArrowUpRight className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button className={cn(
+                          "px-5 py-2 font-bold rounded-lg transition-all flex items-center gap-2 text-[11px] uppercase tracking-widest border shadow-sm",
+                          theme === 'dark' 
+                            ? "bg-white text-black border-white hover:bg-zinc-200" 
+                            : "bg-zinc-900 text-white border-zinc-900 hover:bg-zinc-800 shadow-zinc-950/20"
+                        )}>
+                          Get Started <ArrowUpRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </motion.div>
 
@@ -846,7 +900,7 @@ export const Dashboard: React.FC = () => {
                         whileTap={{ scale: 0.98 }}
                         onClick={() => handleProjectClick(project)}
                         className={cn(
-                          "group border rounded-xl p-4 flex items-center gap-6 cursor-pointer transition-all active:scale-[0.98]",
+                          "group border rounded-xl p-3 flex items-center gap-4 cursor-pointer transition-all active:scale-[0.98]",
                           theme === 'dark' ? "bg-[#0f0f0f] border-white/5 hover:border-emerald-500/30" : "bg-white border-zinc-100 hover:border-emerald-500/30 hover:shadow-md"
                         )}
                       >
