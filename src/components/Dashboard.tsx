@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  Home, 
-  LayoutDashboard, 
-  Star, 
-  Clock, 
-  Plus, 
-  Github, 
-  User, 
-  Settings, 
-  Search, 
-  MoreVertical, 
-  ExternalLink, 
+import {
+  Home,
+  LayoutDashboard,
+  Star,
+  Clock,
+  Plus,
+  Github,
+  User,
+  Settings,
+  Search,
+  MoreVertical,
+  ExternalLink,
   FolderOpen,
   ChevronRight,
   ChevronDown,
@@ -34,7 +34,11 @@ import {
   ShieldCheck,
   Info,
   Archive,
-  ArchiveRestore
+  ArchiveRestore,
+  Monitor,
+  Check,
+  Globe,
+  Cpu
 } from 'lucide-react';
 import { LearaLogo } from './LearaLogo';
 import { useStore } from '../store';
@@ -78,12 +82,12 @@ const StatSkeleton: React.FC<{ theme: 'dark' | 'light' }> = ({ theme }) => (
 );
 
 export const Dashboard: React.FC = () => {
-  const { 
-    setCurrentView, 
-    user, 
-    theme, 
-    setTheme, 
-    setActiveProject, 
+  const {
+    setCurrentView,
+    user,
+    theme,
+    setTheme,
+    setActiveProject,
     userId,
     isApiKeyModalOpen,
     setIsApiKeyModalOpen,
@@ -107,6 +111,7 @@ export const Dashboard: React.FC = () => {
   const [importProgress, setImportProgress] = useState(0);
   const [projectSubFilter, setProjectSubFilter] = useState<'all' | 'archived'>('all');
   const [storageUsed, setStorageUsed] = useState('Calculating...');
+  const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'appearance' | 'editor' | 'ai' | 'account'>('general');
 
   const handleProjectClick = (project: any) => {
     setActiveProject(project);
@@ -193,21 +198,21 @@ export const Dashboard: React.FC = () => {
     try {
       // 1. Create folder on server
       const folderName = newProjectName.toLowerCase().replace(/\s+/g, '-');
-      await axios.post('/api/files/create', { 
-        userId, 
-        path: '', 
-        type: 'directory', 
-        name: folderName 
+      await axios.post('/api/files/create', {
+        userId,
+        path: '',
+        type: 'directory',
+        name: folderName
       });
 
       // 2. Add starter file
       const readmePath = `${folderName}/README.md`;
       const readmeContent = `# ${newProjectName}\n\n${newProjectDesc || 'A fresh new coding environment'}`;
-      await axios.post('/api/files/create', { 
-        userId, 
-        path: folderName, 
-        type: 'file', 
-        name: 'README.md' 
+      await axios.post('/api/files/create', {
+        userId,
+        path: folderName,
+        type: 'file',
+        name: 'README.md'
       });
       await axios.post('/api/files/save', {
         userId,
@@ -235,7 +240,7 @@ export const Dashboard: React.FC = () => {
             }
           });
           projectId = docRef.id;
-          
+
           // 4. Backup starter files to Firestore
           await backupFilesToFirestore(projectId, [
             { id: folderName, name: folderName, type: 'directory' },
@@ -263,7 +268,7 @@ export const Dashboard: React.FC = () => {
     if (!user || !githubUrl.trim()) return;
     setIsSubmitting(true);
     setImportProgress(0);
-    
+
     // Simulate progress
     const progressInterval = setInterval(() => {
       setImportProgress(prev => {
@@ -273,11 +278,11 @@ export const Dashboard: React.FC = () => {
     }, 400);
 
     try {
-      const res = await axios.post('/api/github/import', { 
-        userId, 
-        repoUrl: githubUrl 
+      const res = await axios.post('/api/github/import', {
+        userId,
+        repoUrl: githubUrl
       });
-      
+
       const repoName = res.data.folder;
       const fileTree = res.data.fileTree;
 
@@ -301,7 +306,7 @@ export const Dashboard: React.FC = () => {
               avatar: user.photoURL || `https://picsum.photos/seed/${user.uid}/32/32`
             }
           });
-          
+
           const projectId = docRef.id;
           newProject = {
             id: projectId,
@@ -316,7 +321,7 @@ export const Dashboard: React.FC = () => {
               avatar: user.photoURL || `https://picsum.photos/seed/${user.uid}/32/32`
             }
           };
-          
+
           // Backup all imported files to Firestore
           if (fileTree) {
             toast.info('Indexing files...', { duration: 5000 });
@@ -352,7 +357,7 @@ export const Dashboard: React.FC = () => {
       console.error("Error importing repo:", error);
       const errorMessage = error.response?.data?.error || error.message || 'Failed to import repository';
       const errorDetails = error.response?.data?.details;
-      
+
       toast.error('Import Failed', {
         description: errorDetails ? `${errorMessage}: ${errorDetails}` : errorMessage,
       });
@@ -365,13 +370,13 @@ export const Dashboard: React.FC = () => {
   const deleteProject = async () => {
     if (!projectToDelete) return;
     const { id: projectId, folderName } = projectToDelete;
-    
+
     try {
       await storageService.deleteProject(userId, projectId, folderName);
-      
+
       // Remove from local state immediately in case Firestore isn't connected
       setProjects(prev => prev.filter(p => p.id !== projectId));
-      
+
       toast.success('Project deleted');
       setIsDeleteDialogOpen(false);
       setProjectToDelete(null);
@@ -395,9 +400,9 @@ export const Dashboard: React.FC = () => {
 
   const toggleArchive = async (projectId: string, currentStatus: string) => {
     if (!user) return;
-    
+
     const newStatus = currentStatus === 'Archived' ? 'Active' : 'Archived';
-    
+
     // Cloud Mode
     if (user.uid !== 'local-desktop-user' && db) {
       try {
@@ -413,7 +418,7 @@ export const Dashboard: React.FC = () => {
     }
 
     // Local Mode: Fallback to local state if no DB
-    setProjects(prev => prev.map(p => 
+    setProjects(prev => prev.map(p =>
       p.id === projectId ? { ...p, status: newStatus } : p
     ));
     toast.success(newStatus === 'Archived' ? 'Project archived' : 'Project restored');
@@ -422,14 +427,14 @@ export const Dashboard: React.FC = () => {
   const filteredProjects = projects
     .filter(p => {
       const matchesSearch = p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           p.description?.toLowerCase().includes(searchQuery.toLowerCase());
-      
+        p.description?.toLowerCase().includes(searchQuery.toLowerCase());
+
       const isArchived = p.status === 'Archived';
-      
+
       if (activeTab === 'favorites') return matchesSearch && p.isStarred;
       if (projectSubFilter === 'archived') return matchesSearch && isArchived;
       if (projectSubFilter === 'all') return matchesSearch && !isArchived;
-      
+
       return matchesSearch;
     })
     .sort((a, b) => {
@@ -456,7 +461,7 @@ export const Dashboard: React.FC = () => {
         <nav className="flex-1 px-4 space-y-4 mt-4 flex flex-col min-h-0 overflow-hidden">
           {/* Sidebar Nav Buttons */}
           <div className="space-y-1">
-            <button 
+            <button
               onClick={() => setActiveTab('home')}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group",
@@ -466,7 +471,7 @@ export const Dashboard: React.FC = () => {
               <Home className="w-5 h-5 group-hover:scale-110 transition-transform" />
               <span className="hidden lg:block text-sm font-medium">Home</span>
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab('dashboard')}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group",
@@ -476,7 +481,7 @@ export const Dashboard: React.FC = () => {
               <LayoutDashboard className="w-5 h-5" />
               <span className="hidden lg:block text-sm font-medium">Dashboard</span>
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab('projects')}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group",
@@ -486,7 +491,7 @@ export const Dashboard: React.FC = () => {
               <Layers className="w-5 h-5 group-hover:scale-110 transition-transform" />
               <span className="hidden lg:block text-sm font-medium">Projects</span>
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab('favorites')}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group",
@@ -529,7 +534,7 @@ export const Dashboard: React.FC = () => {
 
         {/* Footer - Pinned to bottom */}
         <div className="p-4 pb-4 border-t border-white/5 space-y-2 shrink-0">
-          <button 
+          <button
             onClick={() => setActiveTab('settings')}
             className={cn(
               "w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all group",
@@ -539,12 +544,12 @@ export const Dashboard: React.FC = () => {
             <Settings className="w-5 h-5 group-hover:rotate-45 transition-transform" />
             <span className="hidden lg:block text-sm font-medium">Settings</span>
           </button>
-          <button 
+          <button
             onClick={() => {
               logOut();
               if (user?.uid === 'local-desktop-user') {
                 useStore.getState().setUser(null);
-                window.location.reload(); 
+                window.location.reload();
               }
             }}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all group text-zinc-500 hover:text-red-400 hover:bg-red-500/5 active:scale-95"
@@ -553,7 +558,7 @@ export const Dashboard: React.FC = () => {
             <span className="hidden lg:block text-sm font-medium">Logout</span>
           </button>
           {user?.uid === 'local-desktop-user' ? (
-            <button 
+            <button
               onClick={() => signIn(false)}
               className="w-full flex items-center gap-3 px-3 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black rounded-xl transition-all group shadow-lg shadow-emerald-500/20 active:scale-95"
             >
@@ -605,7 +610,7 @@ export const Dashboard: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               className={cn(
                 "p-2.5 border rounded-full transition-all",
@@ -616,7 +621,7 @@ export const Dashboard: React.FC = () => {
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
 
-            <button 
+            <button
               onClick={() => setIsCreateDialogOpen(true)}
               className={cn(
                 "p-2.5 border rounded-full transition-all",
@@ -632,41 +637,41 @@ export const Dashboard: React.FC = () => {
           {activeTab === 'home' && (
             <div className="space-y-10">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {isLoading && projects.length === 0 
+                {isLoading && projects.length === 0
                   ? [1, 2, 3, 4].map((i) => <StatSkeleton key={i} theme={theme} />)
                   : [
-                      { title: 'Recent Projects', icon: Clock, count: projects.length, color: 'emerald' },
-                      { title: 'Starred', icon: Star, count: projects.filter(p => p.isStarred).length, color: 'yellow' },
-                      { title: 'Collaborators', icon: User, count: 0, color: 'emerald' },
-                      { title: 'Storage Used', icon: Layers, count: storageUsed, color: 'emerald' },
-                    ].map((stat, i) => (
-                      <motion.div 
-                        key={i}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.1 }}
-                        className={cn(
-                          "border rounded-2xl p-6 transition-all",
-                          theme === 'dark' ? "bg-[#111] border-white/5 hover:border-white/10" : "bg-white border-zinc-100 shadow-sm hover:shadow-md"
-                        )}
-                      >
-                        <div className={cn(
-                          "w-10 h-10 rounded-xl flex items-center justify-center mb-4",
-                          stat.color === 'emerald' ? "bg-emerald-500/10 text-emerald-500" : "bg-yellow-500/10 text-yellow-500"
-                        )}>
-                          <stat.icon className="w-5 h-5" />
-                        </div>
-                        <h4 className="text-zinc-500 text-xs font-bold uppercase tracking-wider">{stat.title}</h4>
-                        <p className={cn(
-                          "mt-1",
-                          typeof stat.count === 'string' && stat.count.length > 10 ? "text-base font-semibold opacity-70 mt-3" : "text-2xl font-bold",
-                          theme === 'dark' ? "text-white" : "text-zinc-900"
-                        )}>{stat.count}</p>
-                      </motion.div>
-                    ))
+                    { title: 'Recent Projects', icon: Clock, count: projects.length, color: 'emerald' },
+                    { title: 'Starred', icon: Star, count: projects.filter(p => p.isStarred).length, color: 'yellow' },
+                    { title: 'Collaborators', icon: User, count: 0, color: 'emerald' },
+                    { title: 'Storage Used', icon: Layers, count: storageUsed, color: 'emerald' },
+                  ].map((stat, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                      className={cn(
+                        "border rounded-2xl p-6 transition-all",
+                        theme === 'dark' ? "bg-[#111] border-white/5 hover:border-white/10" : "bg-white border-zinc-100 shadow-sm hover:shadow-md"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center mb-4",
+                        stat.color === 'emerald' ? "bg-emerald-500/10 text-emerald-500" : "bg-yellow-500/10 text-yellow-500"
+                      )}>
+                        <stat.icon className="w-5 h-5" />
+                      </div>
+                      <h4 className="text-zinc-500 text-xs font-bold uppercase tracking-wider">{stat.title}</h4>
+                      <p className={cn(
+                        "mt-1",
+                        typeof stat.count === 'string' && stat.count.length > 10 ? "text-base font-semibold opacity-70 mt-3" : "text-2xl font-bold",
+                        theme === 'dark' ? "text-white" : "text-zinc-900"
+                      )}>{stat.count}</p>
+                    </motion.div>
+                  ))
                 }
               </div>
-              
+
               <div className={cn(
                 "p-8 rounded-2xl border",
                 theme === 'dark' ? "bg-emerald-500/5 border-emerald-500/20" : "bg-emerald-50 border-emerald-100"
@@ -678,11 +683,11 @@ export const Dashboard: React.FC = () => {
                   {user?.uid === 'local-desktop-user' ? 'Welcome to Leara Desktop!' : `Welcome back, ${user?.displayName?.split(' ')[0] || 'Developer'}!`}
                 </h2>
                 <p className="text-zinc-500 mt-2">
-                  {user?.uid === 'local-desktop-user' 
-                    ? 'Working offline with your local files and local AI.' 
+                  {user?.uid === 'local-desktop-user'
+                    ? 'Working offline with your local files and local AI.'
                     : `You have ${projects.length} active projects and 2 pending invitations.`}
                 </p>
-                <button 
+                <button
                   onClick={() => setActiveTab('dashboard')}
                   className="mt-6 px-6 py-2 bg-emerald-500 text-black font-bold rounded-xl hover:bg-emerald-400 transition-all"
                 >
@@ -697,7 +702,7 @@ export const Dashboard: React.FC = () => {
               {/* Bento Grid Actions - Only show on Dashboard */}
               {activeTab === 'dashboard' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <motion.div 
+                  <motion.div
                     whileHover={{ y: -4 }}
                     onClick={() => setIsCreateDialogOpen(true)}
                     className={cn(
@@ -724,18 +729,11 @@ export const Dashboard: React.FC = () => {
                       <button className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-xl transition-all flex items-center gap-2">
                         Get Started <ArrowUpRight className="w-4 h-4" />
                       </button>
-                      <div className="flex -space-x-2">
-                        {[1,2,3].map(i => (
-                          <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-zinc-800 flex items-center justify-center text-[10px] font-bold overflow-hidden">
-                            <img src={`https://picsum.photos/seed/tech${i}/32/32`} className="w-full h-full object-cover" alt="stack" />
-                          </div>
-                        ))}
-                      </div>
                     </div>
                   </motion.div>
 
                   <div className="grid grid-cols-1 gap-6">
-                    <motion.div 
+                    <motion.div
                       whileHover={{ y: -4 }}
                       onClick={() => setIsImportDialogOpen(true)}
                       className={cn(
@@ -761,7 +759,7 @@ export const Dashboard: React.FC = () => {
                       </div>
                     </motion.div>
 
-                    <motion.div 
+                    <motion.div
                       whileHover={{ y: -4 }}
                       onClick={() => setIsApiKeyModalOpen(true)}
                       className={cn(
@@ -805,14 +803,14 @@ export const Dashboard: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button 
+                    <button
                       onClick={() => setProjectSubFilter('all')}
                       className={cn(
                         "px-3 py-1.5 text-xs font-bold transition-all rounded-lg",
                         projectSubFilter === 'all' ? "text-emerald-500 bg-emerald-500/10" : "text-zinc-500 hover:text-white"
                       )}
                     >All</button>
-                    <button 
+                    <button
                       onClick={() => setProjectSubFilter('archived')}
                       className={cn(
                         "px-3 py-1.5 text-xs font-bold transition-all rounded-lg",
@@ -839,7 +837,7 @@ export const Dashboard: React.FC = () => {
                     </div>
                   ) : (
                     filteredProjects.map((project) => (
-                      <motion.div 
+                      <motion.div
                         key={project.id}
                         role="button"
                         initial={{ opacity: 0, x: -20 }}
@@ -858,7 +856,7 @@ export const Dashboard: React.FC = () => {
                         )}>
                           <Code2 className="w-6 h-6 text-zinc-500 group-hover:text-emerald-500 transition-colors" />
                         </div>
-                        
+
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3">
                             <h4 className={cn(
@@ -885,7 +883,7 @@ export const Dashboard: React.FC = () => {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <button 
+                          <button
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleStar(project.id, project.isStarred);
@@ -897,7 +895,7 @@ export const Dashboard: React.FC = () => {
                           >
                             <Star className={cn("w-4 h-4", project.isStarred && "fill-current")} />
                           </button>
-                          <button 
+                          <button
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleArchive(project.id, project.status);
@@ -910,7 +908,7 @@ export const Dashboard: React.FC = () => {
                           >
                             {project.status === 'Archived' ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
                           </button>
-                          <button 
+                          <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setProjectToDelete({ id: project.id, folderName: project.folderName });
@@ -930,118 +928,274 @@ export const Dashboard: React.FC = () => {
             </>
           )}
           {activeTab === 'settings' && (
-            <div className="max-w-4xl mx-auto space-y-8">
-              <div className="flex items-center justify-between">
-                <h2 className={cn(
-                  "text-3xl font-bold tracking-tight",
-                  theme === 'dark' ? "text-white" : "text-zinc-900"
-                )}>Settings</h2>
-                <button 
-                  onClick={() => logOut()}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl text-sm font-bold transition-all"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Logout
-                </button>
-              </div>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="space-y-4">
-                  <h3 className={cn(
-                    "text-xl font-bold",
-                    theme === 'dark' ? "text-white" : "text-zinc-900"
-                  )}>Account Settings</h3>
-                  <div className={cn(
-                    "border rounded-2xl p-6 space-y-6",
-                    theme === 'dark' ? "bg-[#111] border-white/5" : "bg-white border-zinc-100 shadow-sm"
-                  )}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center overflow-hidden">
-                          {user?.photoURL ? <img src={user.photoURL} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <User className="w-6 h-6" />}
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold">{user?.displayName}</p>
-                          <p className="text-xs text-zinc-500 font-medium">{user?.email}</p>
+            <div className={cn(
+              "flex flex-1 -m-8 h-[calc(100vh-80px)]",
+              theme === 'dark' ? "bg-[#0a0a0a]" : "bg-white"
+            )}>
+              {/* Settings Sidebar */}
+              <aside className="w-64 border-r border-white/5 flex flex-col shrink-0">
+                <nav className="p-4 space-y-1">
+                  {[
+                    { id: 'general', label: 'General', icon: Home },
+                    { id: 'appearance', label: 'Appearance', icon: Monitor },
+                    { id: 'editor', label: 'Editor', icon: Code2 },
+                    { id: 'ai', label: 'AI & Intelligence', icon: Sparkles },
+                    { id: 'account', label: 'Account & Security', icon: ShieldCheck },
+                  ].map((subTab) => (
+                    <button
+                      key={subTab.id}
+                      onClick={() => setSettingsSubTab(subTab.id as any)}
+                      className={cn(
+                        "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all text-left",
+                        settingsSubTab === subTab.id
+                          ? "bg-emerald-500/10 text-emerald-400 font-bold"
+                          : "text-zinc-500 hover:bg-white/5 hover:text-white font-medium"
+                      )}
+                    >
+                      <subTab.icon className={cn("w-4 h-4", settingsSubTab === subTab.id ? "text-emerald-400" : "text-zinc-600")} />
+                      <span className="text-xs">{subTab.label}</span>
+                    </button>
+                  ))}
+                </nav>
+                <div className="mt-auto p-4 border-t border-white/5">
+                  <button
+                    onClick={() => logOut()}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/5 rounded-xl transition-all group"
+                  >
+                    <LogOut className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                    <span className="text-xs font-bold uppercase tracking-wider">Logout</span>
+                  </button>
+                </div>
+              </aside>
+
+              {/* Settings Content Area */}
+              <div className="flex-1 flex flex-col min-w-0 bg-white/[0.01]">
+
+                <div className="flex-1 overflow-y-auto p-8 space-y-10">
+                  {settingsSubTab === 'general' && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div className="space-y-4">
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">Workspace Management</h4>
+                        <div className="space-y-1">
+                          {[
+                            { label: 'Auto-save changes', desc: 'Automatically commit changes to the local filesystem', enabled: true },
+                            { label: 'Telemetry', desc: 'Share anonymous usage data to help improve Leara', enabled: false },
+                            { label: 'Sync to Cloud', desc: 'Real-time backup of your workspace to secure cloud storage', enabled: user?.uid !== 'local-desktop-user' },
+                          ].map((pref, i) => (
+                            <div key={i} className="flex items-center justify-between p-4 rounded-xl hover:bg-white/[0.02] transition-all group">
+                              <div className="space-y-0.5">
+                                <p className={cn(
+                                  "text-sm font-bold",
+                                  theme === 'dark' ? "text-zinc-200" : "text-zinc-900"
+                                )}>{pref.label}</p>
+                                <p className="text-xs text-zinc-500 font-medium">{pref.desc}</p>
+                              </div>
+                              <div className={cn(
+                                "w-10 h-5 rounded-full p-1 transition-all cursor-pointer relative",
+                                pref.enabled ? 'bg-emerald-500' : 'bg-zinc-800'
+                              )}>
+                                <div className={cn(
+                                  "w-3 h-3 bg-white rounded-full transition-all shadow-sm",
+                                  pref.enabled ? 'translate-x-5' : 'translate-x-0'
+                                )} />
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                      <button className={cn(
-                        "px-4 py-2 border rounded-xl text-xs font-bold transition-all",
-                        theme === 'dark' ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white border-zinc-200 text-zinc-900 hover:bg-zinc-50"
-                      )}>Edit Profile</button>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="space-y-4">
-                  <h3 className={cn(
-                    "text-xl font-bold",
-                    theme === 'dark' ? "text-white" : "text-zinc-900"
-                  )}>Preferences</h3>
-                  <div className={cn(
-                    "border rounded-2xl p-6 space-y-4",
-                    theme === 'dark' ? "bg-[#111] border-white/5" : "bg-white border-zinc-100 shadow-sm"
-                  )}>
-                    {[
-                      { label: 'Email Notifications', desc: 'Receive updates about your projects', enabled: true },
-                      { label: 'Auto-save', desc: 'Automatically save your changes in the editor', enabled: true },
-                      { label: 'Public Profile', desc: 'Allow others to see your projects', enabled: false },
-                    ].map((pref, i) => (
-                      <div key={i} className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-white/5 last:border-0">
-                        <div>
-                          <p className="text-sm font-bold">{pref.label}</p>
-                          <p className="text-xs text-zinc-500 font-medium">{pref.desc}</p>
+                      <div className="space-y-4">
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">Storage Information</h4>
+                        <div className="p-6 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-400">
+                              <Archive className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <p className={cn(
+                                "text-sm font-bold",
+                                theme === 'dark' ? "text-white" : "text-zinc-900"
+                              )}>Local Workspace Storage</p>
+                              <p className="text-xs text-zinc-500 font-medium">Used: {storageUsed} / Unlimited</p>
+                            </div>
+                          </div>
+                          <button className="text-xs font-bold text-emerald-500 hover:underline">Clear Cache</button>
                         </div>
-                        <div className={cn(
-                          "w-10 h-5 rounded-full p-1 transition-all cursor-pointer",
-                          pref.enabled ? 'bg-emerald-500' : 'bg-zinc-800'
-                        )}>
+                      </div>
+                    </div>
+                  )}
+
+                  {settingsSubTab === 'appearance' && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div className="grid grid-cols-2 gap-4">
+                        <button
+                          onClick={() => setTheme('dark')}
+                          className={cn(
+                            "flex flex-col items-start p-6 rounded-2xl border transition-all relative overflow-hidden group",
+                            theme === 'dark' ? "bg-emerald-500/10 border-emerald-500/50" : "bg-white/5 border-white/5 hover:border-white/10"
+                          )}
+                        >
                           <div className={cn(
-                            "w-3 h-3 bg-white rounded-full transition-all",
-                            pref.enabled ? 'translate-x-5' : 'translate-x-0'
-                          )} />
+                            "w-10 h-10 rounded-xl flex items-center justify-center mb-4 transition-all",
+                            theme === 'dark' ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20" : "bg-zinc-800 text-zinc-400 group-hover:text-white"
+                          )}>
+                            <Moon className="w-5 h-5" />
+                          </div>
+                          <span className={cn("font-black uppercase tracking-widest text-xs", theme === 'dark' ? "text-white" : "text-zinc-500")}>Shadow Theme</span>
+                          <p className="text-[10px] text-zinc-500 mt-1 font-bold">Recommended for Night Engineering</p>
+                          {theme === 'dark' && <Check className="absolute top-4 right-4 w-4 h-4 text-emerald-500" />}
+                        </button>
+
+                        <button
+                          onClick={() => setTheme('light')}
+                          className={cn(
+                            "flex flex-col items-start p-6 rounded-2xl border transition-all relative overflow-hidden group",
+                            theme === 'light' ? "bg-emerald-500/10 border-emerald-500/50" : "bg-white/5 border-white/5 hover:border-white/10"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-10 h-10 rounded-xl flex items-center justify-center mb-4 transition-all",
+                            theme === 'light' ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20" : "bg-white text-zinc-500 group-hover:text-zinc-900"
+                          )}>
+                            <Sun className="w-5 h-5" />
+                          </div>
+                          <span className={cn("font-black uppercase tracking-widest text-xs", theme === 'light' ? "text-white" : "text-zinc-500")}>Daylight Theme</span>
+                          <p className="text-[10px] text-zinc-500 mt-1 font-bold">Optimized for Maximum Contrast</p>
+                          {theme === 'light' && <Check className="absolute top-4 right-4 w-4 h-4 text-emerald-500" />}
+                        </button>
+                      </div>
+
+                      <div className="p-6 rounded-2xl bg-white/5 border border-white/5 space-y-4">
+                        <h4 className="text-xs font-black uppercase tracking-widest text-white/50">Interface Polish</h4>
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-bold text-zinc-300">Glassmorphism Effects</span>
+                            <div className="w-10 h-5 bg-emerald-500 rounded-full p-1"><div className="w-3 h-3 bg-white rounded-full translate-x-5" /></div>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-bold text-zinc-300">High-Density Explorer</span>
+                            <div className="w-10 h-5 bg-emerald-500 rounded-full p-1"><div className="w-3 h-3 bg-white rounded-full translate-x-5" /></div>
+                          </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+                    </div>
+                  )}
 
-              <div className="space-y-4">
-                <h3 className={cn(
-                  "text-xl font-bold",
-                  theme === 'dark' ? "text-white" : "text-zinc-900"
-                )}>Theme & Appearance</h3>
-                <div className={cn(
-                  "border rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 gap-4",
-                  theme === 'dark' ? "bg-[#111] border-white/5" : "bg-white border-zinc-100 shadow-sm"
-                )}>
-                  <button 
-                    onClick={() => setTheme('dark')}
-                    className={cn(
-                      "flex items-center justify-between p-4 rounded-xl border transition-all",
-                      theme === 'dark' ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-400" : "bg-white/5 border-white/10 text-zinc-400 hover:bg-white/10"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Moon className="w-5 h-5" />
-                      <span className="font-bold">Dark Mode</span>
+                  {settingsSubTab === 'editor' && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="text-xs font-black uppercase tracking-[0.2em] text-zinc-500 ml-1">Font Family</label>
+                          <select className="w-full bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none">
+                            <option>JetBrains Mono</option>
+                            <option>Cascadia Code</option>
+                            <option>Fira Code</option>
+                            <option>Roboto Mono</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-black uppercase tracking-[0.2em] text-zinc-500 ml-1">Font Size</label>
+                          <div className="flex items-center gap-4">
+                            <input type="range" className="flex-1 accent-emerald-500" defaultValue={14} />
+                            <span className="w-10 text-center font-bold text-sm text-white">14px</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-6 rounded-2xl bg-white/5 border border-white/5 space-y-4">
+                        <h4 className="text-xs font-black uppercase tracking-widest text-zinc-500">Editor Features</h4>
+                        <div className="grid grid-cols-2 gap-x-12 gap-y-2">
+                          {[
+                            'Minimap Enabled', 'Bracket Pair Colorization', 'Smooth Caret Animation',
+                            'Format on Save', 'AI Code Completion', 'Inlay Hints'
+                          ].map((feat) => (
+                            <div key={feat} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.02] px-2 rounded-lg transition-all">
+                              <span className="text-xs font-bold text-zinc-300">{feat}</span>
+                              <div className="w-8 h-4 bg-emerald-500 rounded-full p-0.5"><div className="w-3 h-3 bg-white rounded-full translate-x-4" /></div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                    {theme === 'dark' && <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50" />}
-                  </button>
-                  <button 
-                    onClick={() => setTheme('light')}
-                    className={cn(
-                      "flex items-center justify-between p-4 rounded-xl border transition-all",
-                      theme === 'light' ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-400" : "bg-white/5 border-white/10 text-zinc-400 hover:bg-white/10"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Sun className="w-5 h-5" />
-                      <span className="font-bold">Light Mode</span>
+                  )}
+
+                  {settingsSubTab === 'ai' && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div className="p-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center text-black shrink-0">
+                          <Sparkles className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="text-lg font-black uppercase tracking-tight text-white line-clamp-1">Intelligent Workspace</h4>
+                          <p className="text-xs text-zinc-400 font-medium leading-relaxed mt-1">Configure your AI providers to enable code explanation, generation, and automated fixes across your codebase.</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">Connected Providers</h4>
+                        <div className="space-y-3">
+                          {[
+                            { id: 'gemini', name: 'Google Gemini 1.5 Pro', status: useStore.getState().providerKeys.gemini ? 'Connected' : 'Missing Key', icon: Globe },
+                            { id: 'openai', name: 'OpenAI GPT-4o', status: useStore.getState().providerKeys.openai ? 'Connected' : 'Missing Key', icon: Cpu },
+                            { id: 'ollama', name: 'Ollama (Local LLM)', status: 'System Default', icon: Monitor },
+                          ].map((p) => (
+                            <div key={p.id} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-all group">
+                              <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-500 group-hover:text-white transition-colors">
+                                  <p.icon className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-white">{p.name}</p>
+                                  <p className={cn("text-[9px] font-black uppercase tracking-widest", p.status === 'Connected' ? "text-emerald-500" : "text-amber-500/50")}>{p.status}</p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => setIsApiKeyModalOpen(true)}
+                                className="px-4 py-1.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-white transition-all shadow-sm"
+                              >Configure</button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                    {theme === 'light' && <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50" />}
-                  </button>
+                  )}
+
+                  {settingsSubTab === 'account' && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div className="p-8 rounded-2xl bg-[#111] border border-white/5 flex flex-col items-center text-center space-y-4">
+                        <div className="relative group">
+                          <div className="w-24 h-24 rounded-full bg-zinc-800 border-4 border-emerald-500/20 overflow-hidden group-hover:border-emerald-500/50 transition-all">
+                            {user?.photoURL ? <img src={user.photoURL} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <User className="w-12 h-12 text-zinc-600 m-6" />}
+                          </div>
+                          <button className="absolute bottom-0 right-0 w-8 h-8 bg-emerald-500 text-black rounded-full flex items-center justify-center shadow-xl hover:scale-110 transition-all">
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-black text-white">{user?.displayName}</h3>
+                          <p className="text-sm text-zinc-500 font-medium">{user?.email}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-3 py-1 bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-widest rounded-full border border-emerald-500/20">Pro Member</span>
+                          <span className="px-3 py-1 bg-white/5 text-zinc-500 text-[10px] font-black uppercase tracking-widest rounded-full border border-white/5">Local Sync</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">Security Actions</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <button className="p-4 rounded-xl bg-white/5 border border-white/5 text-left hover:bg-white/10 transition-all group">
+                            <h5 className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">Setup Two-Factor Auth</h5>
+                            <p className="text-xs text-zinc-500 font-medium mt-1">Add an extra layer of security</p>
+                          </button>
+                          <button className="p-4 rounded-xl bg-red-500/5 border border-red-500/10 text-left hover:bg-red-500/10 transition-all group">
+                            <h5 className="text-sm font-bold text-red-400">Delete Account</h5>
+                            <p className="text-xs text-zinc-500 font-medium mt-1">Permanently remove your data</p>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1049,9 +1203,9 @@ export const Dashboard: React.FC = () => {
         </div>
       </main>
 
-      <ApiKeyModal 
-        isOpen={isApiKeyModalOpen} 
-        onClose={() => setIsApiKeyModalOpen(false)} 
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
       />
 
       {/* Create Project Dialog */}
@@ -1087,11 +1241,11 @@ export const Dashboard: React.FC = () => {
                 <X className="w-5 h-5" />
               </Dialog.Close>
             </div>
-            
+
             <div className="space-y-6">
               <div className="space-y-2">
                 <label htmlFor="project-name" className="text-xs font-semibold text-zinc-500 ml-1">Project Name</label>
-                <input 
+                <input
                   id="project-name"
                   name="projectName"
                   type="text"
@@ -1105,10 +1259,10 @@ export const Dashboard: React.FC = () => {
                   autoFocus
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <label htmlFor="project-desc" className="text-xs font-semibold text-zinc-500 ml-1">Description (Optional)</label>
-                <textarea 
+                <textarea
                   id="project-desc"
                   name="projectDesc"
                   value={newProjectDesc}
@@ -1121,7 +1275,7 @@ export const Dashboard: React.FC = () => {
                 />
               </div>
 
-              <button 
+              <button
                 onClick={createNewProject}
                 disabled={isSubmitting || !newProjectName.trim()}
                 className={cn(
@@ -1169,13 +1323,13 @@ export const Dashboard: React.FC = () => {
                 <X className="w-5 h-5" />
               </Dialog.Close>
             </div>
-            
+
             <div className="space-y-6">
               <div className="space-y-2">
                 <label htmlFor="github-url" className="text-xs font-semibold text-zinc-500 ml-1">GitHub URL</label>
                 <div className="relative group">
                   <Github className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                  <input 
+                  <input
                     id="github-url"
                     name="githubUrl"
                     type="text"
@@ -1201,7 +1355,7 @@ export const Dashboard: React.FC = () => {
                 </p>
               </div>
 
-              <button 
+              <button
                 onClick={importRepo}
                 disabled={isSubmitting || !githubUrl.trim()}
                 className={cn(
@@ -1211,8 +1365,8 @@ export const Dashboard: React.FC = () => {
               >
                 {isSubmitting ? (
                   <>
-                    <div 
-                      className="absolute inset-0 bg-white/20 transition-all duration-300 pointer-events-none" 
+                    <div
+                      className="absolute inset-0 bg-white/20 transition-all duration-300 pointer-events-none"
                       style={{ width: `${importProgress}%` }}
                     />
                     <span className="relative z-10 flex items-center gap-2">
@@ -1257,7 +1411,7 @@ export const Dashboard: React.FC = () => {
                 <X className="w-5 h-5" />
               </Dialog.Close>
             </div>
-            
+
             <div className="space-y-6">
               <div className={cn(
                 "p-4 rounded-xl flex items-start gap-3 border",
@@ -1276,7 +1430,7 @@ export const Dashboard: React.FC = () => {
                 )}>
                   Cancel
                 </Dialog.Close>
-                <button 
+                <button
                   onClick={deleteProject}
                   className="flex-1 py-3 bg-red-500 hover:bg-red-400 text-white font-semibold text-sm rounded-xl transition-all active:scale-[0.98]"
                 >

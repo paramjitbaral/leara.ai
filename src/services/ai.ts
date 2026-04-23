@@ -4,8 +4,10 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp } from "fire
 import { useStore } from "../store";
 
 async function callAI(prompt: string, systemInstruction: string, context: any = {}): Promise<string> {
-  const { aiProvider, userApiKey, aiModel, aiEndpoint } = useStore.getState();
+  const { aiProvider, userApiKey, aiModel, aiEndpoint, providerKeys } = useStore.getState();
   
+  const activeKey = providerKeys[aiProvider] || userApiKey;
+
   const response = await fetch('/api/ai/copilot', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -13,10 +15,14 @@ async function callAI(prompt: string, systemInstruction: string, context: any = 
       prompt, 
       context, 
       provider: aiProvider, 
-      apiKey: userApiKey,
+      apiKey: activeKey,
       model: aiModel,
       endpoint: aiEndpoint,
-      systemInstruction
+      systemInstruction: `You are a minimalist coding mentor.
+    - Adapt response length to query. If user says 'hi/hello', respond in ONE SENTENCE.
+    - Be extremely concise. Use technical bullet points.
+    - Prioritize speed and direct answers.
+    - Do not over-explain basic concepts unless asked.`
     })
   });
 
@@ -57,19 +63,36 @@ function generateHash(str: string): string {
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash |= 0; // Convert to 32bit integer
+    hash |= 0; 
   }
   return hash.toString();
 }
 
 export async function explainCode(code: string, language: string): Promise<Explanation> {
-  const hash = generateHash(`explain-${language}-${code}`);
+  const hash = generateHash(`explain-v2-${language}-${code}`);
   const cached = await getCache(hash);
   if (cached && cached.explanation) return cached.explanation;
 
   const text = await callAI(
-    `Code:\n${code}`,
-    `Explain this ${language} code for a learner. Return ONLY a JSON object matching this interface: { title: string, explanation: string, keyConcepts: string[], complexity: string }`,
+    `Code Body:\n${code}`,
+    `You are a Senior Engineering Mentor. Analyze this ${language} code and generate a comprehensive 12-step structured learning journey.
+    Return ONLY a JSON object matching this precise interface:
+    {
+      "summary": string[],
+      "visualFlow": "string",
+      "mainBlock": { "name": "string", "bullets": Array<{ "text": "string", "lineRange": { "start": number, "end": number } }> },
+      "prediction": { "question": "string", "options": string[], "correctAnswer": "string", "explanation": "string" },
+      "executionSteps": Array<{ "line": number, "description": "string", "variables": Record<string, any> }>,
+      "experiment": { "task": "string", "expectedOutcome": "string" },
+      "debugTask": { "buggyCode": "string", "description": "string", "solution": "string" },
+      "practice": { 
+        "fillInCode": { "template": "string", "answer": "string" }, 
+        "logicQuestion": { "question": "string", "answer": "string" } 
+      },
+      "dsa": { "categories": string[], "technique": "string", "timeComplexity": "string", "spaceComplexity": "string" },
+      "realWorldConnection": string[],
+      "miniRecap": string[]
+    }`,
     { language, code }
   );
   
@@ -79,13 +102,14 @@ export async function explainCode(code: string, language: string): Promise<Expla
 }
 
 export async function generateExercises(code: string, language: string, isStruggling: boolean): Promise<Exercise[]> {
-  const hash = generateHash(`exercises-${language}-${isStruggling}-${code}`);
+  const hash = generateHash(`exercises-v2-${language}-${isStruggling}-${code}`);
   const cached = await getCache(hash);
   if (cached && cached.exercises) return cached.exercises;
 
   const text = await callAI(
-    `Code:\n${code}`,
-    `Generate 3 coding exercises for this ${language} code. Difficulty: ${isStruggling ? 'Easy' : 'Normal'}. Return ONLY a JSON array of Exercise objects: { id: string, title: string, description: string, starterCode: string, solution: string }`,
+    `Base Code:\n${code}`,
+    `Generate 3 technical coding exercises. Return ONLY JSON array: 
+    [ { "id": "string", "type": "completion" | "question", "question": "string", "codeTemplate": "string", "correctAnswer": "string", "hint": "string" } ]`,
     { language, code, isStruggling }
   );
   
@@ -94,55 +118,48 @@ export async function generateExercises(code: string, language: string, isStrugg
   return exercises;
 }
 
-export async function generateInitialLearningStep(content: string, language: string): Promise<{ sessionInfo: any, firstStep: LearningStep }> {
+export async function validateAnswer(question: string, userCode: string, solution: string): Promise<{ correct: boolean, feedback: string }> {
   try {
     const text = await callAI(
-      `Code:\n\`\`\`${language}\n${content}\n\`\`\``,
-      `Analyze this code and create a structured learning session. Return ONLY a JSON object with: 
-      - sessionInfo: { title: string, description: string }
-      - firstStep: { id: string, title: string, goal: string, expectedOutput: string, tasks: string[], partialCode: string, solution: string, hint: string, validationLogic: string }`,
-      { language, content }
+        `Question: ${question}\nUser: \`${userCode}\`\nSolution: \`${solution}\``,
+        `Evaluate equivalence. Return ONLY JSON: { "correct": boolean, "feedback": "string" }`,
+        { question, userCode, solution }
     );
-
-    if (!text) throw new Error("Empty response from AI");
-    const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
-    return JSON.parse(cleanJson);
-  } catch (error: any) {
-    console.error("AI Generation Error (Initial):", error);
-    throw error;
+    return JSON.parse(text.replace(/```json\n?|\n?```/g, '').trim());
+  } catch (err: any) {
+    return { correct: false, feedback: "Evaluation failed." };
   }
+}
+
+export async function generateInitialLearningStep(content: string, language: string): Promise<{ sessionInfo: { title: string, description: string }, firstStep: LearningStep }> {
+  const text = await callAI(
+    `Full Code:\n${content}`,
+    `Create the FIRST step of a "build from scratch" coding lesson. 
+    Return ONLY JSON:
+    {
+      "sessionInfo": { "title": "string", "description": "string" },
+      "firstStep": { 
+        "id": "step1", "title": "string", "goal": "string", "expectedOutput": "string", 
+        "tasks": string[], "partialCode": "string", "solution": "string", "hint": "string", "validationLogic": "string" 
+      }
+    }`,
+    { language, content }
+  );
+  return JSON.parse(text.replace(/```json\n?|\n?```/g, '').trim());
 }
 
 export async function generateRemainingLearningSteps(content: string, language: string, title: string): Promise<{ steps: LearningStep[], finalExplanation: string, understandingCheck: string, practiceProblem: any }> {
-  try {
-    const text = await callAI(
-      `Full Code:\n\`\`\`${language}\n${content}\n\`\`\``,
-      `Continue the learning session for "${title}". Generate remaining steps (2-5 more), finalExplanation, understandingCheck question, and a practiceProblem: { question, starterCode, solution }. Return ONLY JSON.`,
-      { language, content, title }
-    );
-
-    if (!text) throw new Error("Empty response from AI");
-    const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
-    return JSON.parse(cleanJson);
-  } catch (error: any) {
-    console.error("AI Generation Error (Remaining):", error);
-    throw error;
-  }
-}
-
-export async function validateAnswer(task: string, userCode: string, solution: string): Promise<{ correct: boolean, feedback: string }> {
-  try {
-    const text = await callAI(
-      `Task: ${task}\nUser Code: \`${userCode}\`\nReference Solution: \`${solution}\``,
-      `Validate the user's code. Return ONLY JSON: { correct: boolean, feedback: string }`,
-      { task, userCode, solution }
-    );
-
-    if (!text) throw new Error("Empty response from AI");
-    const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
-    return JSON.parse(cleanJson);
-  } catch (error: any) {
-    console.error("AI Validation Error:", error);
-    return { correct: false, feedback: "Failed to validate code. Please try again." };
-  }
+  const text = await callAI(
+    `Code:\n${content}`,
+    `Generate steps 2-5 for the lesson "${title}".
+    Return ONLY JSON:
+    {
+      "steps": Array<LearningStep>,
+      "finalExplanation": "string",
+      "understandingCheck": "string",
+      "practiceProblem": { "question": "string", "starterCode": "string", "solution": "string" }
+    }`,
+    { language, content, title }
+  );
+  return JSON.parse(text.replace(/```json\n?|\n?```/g, '').trim());
 }

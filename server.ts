@@ -32,7 +32,38 @@ app.use((req, res, next) => {
   next();
 });
 
+// --- Terminal Execution Route ---
+app.post("/api/terminal/run", async (req, res) => {
+  const { command, cwd } = req.body;
+  if (!command) return res.status(400).json({ error: "No command provided" });
+
+  const workingDir = cwd || process.cwd();
+
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Transfer-Encoding", "chunked");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+
+  const isWin = process.platform === "win32";
+  const proc = spawn(isWin ? "cmd" : "sh", [isWin ? "/c" : "-c", command], {
+    cwd: workingDir,
+    env: { ...process.env, FORCE_COLOR: "0" },
+    shell: false,
+  });
+
+  proc.stdout.on("data", (chunk) => res.write(chunk));
+  proc.stderr.on("data", (chunk) => res.write(chunk));
+  proc.on("close", (code) => {
+    res.write(`\n[Process exited with code ${code}]`);
+    res.end();
+  });
+  proc.on("error", (err) => {
+    res.write(`\n[Error: ${err.message}]`);
+    res.end();
+  });
+});
+
 // --- File System Routes ---
+
 
 // List files recursively
 app.get("/api/files", async (req, res) => {
@@ -377,46 +408,121 @@ app.post("/api/ai/copilot", async (req, res) => {
       const key = apiKey || (provider === "openai" ? process.env.OPENAI_API_KEY : '');
       if (!key && provider === "openai") throw new Error("OpenAI API Key is missing.");
       
-      const openaiConfig: any = { 
-        apiKey: key || 'no-key-required'
-      };
-      
-      if (provider === "custom" && endpoint) {
-        openaiConfig.baseURL = endpoint;
+      const baseUrl = endpoint || "https://api.openai.com/v1";
+
+      if (provider === "openai") {
+        const openai = new OpenAI({ apiKey: key });
+        const completion = await openai.chat.completions.create({
+          model: model || "gpt-4-turbo-preview",
+          messages: [
+            { role: "system", content: systemInstruction || "You are a helpful coding assistant." },
+            { role: "user", content: `Context: ${JSON.stringify(context)}\n\nQuery: ${prompt}` }
+          ],
+        });
+        return res.json({ response: completion.choices[0].message.content });
       }
-      
-      const openai = new OpenAI(openaiConfig);
-      const completion = await openai.chat.completions.create({
-        model: model || (provider === "openai" ? "gpt-4-turbo-preview" : "gpt-3.5-turbo"),
-        messages: [
-          { role: "system", content: systemInstruction || "You are a helpful coding assistant." },
-          { role: "user", content: `Context: ${JSON.stringify(context)}\n\nQuery: ${prompt}` }
-        ],
-      });
-      return res.json({ response: completion.choices[0].message.content });
+
+      if (provider === "custom") {
+        const attemptCustom = async (modelName: string) => {
+          return await axios.post(`${baseUrl}/chat/completions`, {
+            model: modelName,
+            messages: [
+              { role: "system", content: systemInstruction || "You are a helpful coding assistant." },
+              { role: "user", content: `Context: ${JSON.stringify(context)}\n\nQuery: ${prompt}` }
+            ]
+          }, { 
+            headers: { 
+              'Authorization': `Bearer ${key}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 20000 
+          });
+        };
+
+        const isOpenRouter = baseUrl.includes('openrouter.ai');
+        const modelsToTry = [model];
+        if (isOpenRouter) {
+          if (model?.includes(':free') || model === 'openrouter/free') {
+            modelsToTry.push(
+              "meta-llama/llama-3.3-70b-instruct:free", 
+              "minimax/minimax-m2.5:free", 
+              "google/gemini-2.0-flash-exp:free",
+              "qwen/qwen3-coder:free"
+            );
+          }
+        }
+        
+        const uniqueModels = [...new Set(modelsToTry.filter(Boolean))] as string[];
+        let lastError: any = null;
+
+        for (const targetModel of uniqueModels) {
+          try {
+            console.log(`[AI] Attempting Custom Model: ${targetModel}...`);
+            const response = await attemptCustom(targetModel);
+            if (response.data.choices?.[0]?.message?.content) {
+              return res.json({ response: response.data.choices[0].message.content, modelUsed: targetModel });
+            }
+            throw new Error("Invalid response from custom provider");
+          } catch (err: any) {
+            lastError = err;
+            const status = err.response?.status;
+            const msg = err.response?.data?.error?.message || err.message;
+            console.warn(`[AI] Custom ${targetModel} failed: ${msg}`);
+            if (status === 401 || status === 400) break;
+            if (!isOpenRouter) break;
+          }
+        }
+        const finalMsg = lastError.response?.data?.error?.message || lastError.message;
+        throw new Error(`Custom Provider Exhausted: ${finalMsg}`);
+      }
     }
 
     if (provider === "gemini") {
       const key = apiKey || process.env.GEMINI_API_KEY;
       if (!key) throw new Error("Gemini API Key is missing.");
       
-      const geminiModel = model || "gemini-1.5-flash";
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${key}`;
-      
-      const response = await axios.post(apiUrl, {
-        contents: [{ 
-          parts: [{ 
-            text: `${systemInstruction || "You are a helpful coding assistant."}\n\nContext: ${JSON.stringify(context)}\n\nQuery: ${prompt}` 
-          }] 
-        }]
-      });
-      
-      if (!response.data.candidates?.[0]?.content?.parts?.[0]?.text) {
-        console.error("[AI] Gemini error response:", response.data);
-        throw new Error("Invalid response structure from Gemini API");
-      }
+      const attemptGemini = async (modelName: string) => {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${key}`;
+        return await axios.post(apiUrl, {
+          contents: [{ 
+            parts: [{ 
+              text: `${systemInstruction || "You are a helpful coding assistant."}\n\nContext: ${JSON.stringify(context)}\n\nQuery: ${prompt}` 
+            }] 
+          }]
+        }, { timeout: 15000 });
+      };
 
-      return res.json({ response: response.data.candidates[0].content.parts[0].text });
+      // Intelligent Fallback Chain: We try the requested model first, then fall back to the most stable tiers
+      const modelsToTry = [model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"].filter(Boolean) as string[];
+      // Remove duplicates while preserving order
+      const uniqueModels = [...new Set(modelsToTry)];
+      
+      let lastError: any = null;
+      for (const targetModel of uniqueModels) {
+        try {
+          console.log(`[AI] Attempting ${targetModel}...`);
+          const response = await attemptGemini(targetModel);
+          
+          if (response.data.candidates?.[0]?.content?.parts?.[0]?.text) {
+            console.log(`[AI] Success with ${targetModel}`);
+            return res.json({ response: response.data.candidates[0].content.parts[0].text, modelUsed: targetModel });
+          }
+          throw new Error("Invalid response structure from Gemini API");
+        } catch (err: any) {
+          lastError = err;
+          const status = err.response?.status;
+          const msg = err.response?.data?.error?.message || err.message;
+          console.warn(`[AI] ${targetModel} failed: ${msg}`);
+          
+          // If it's an authentication error (401/403), don't bother retrying other models
+          if (status === 401 || (status === 403 && !msg.toLowerCase().includes('quota'))) {
+            break;
+          }
+        }
+      }
+      
+      const finalMsg = lastError.response?.data?.error?.message || lastError.message;
+      throw new Error(`Gemini Exhausted: ${finalMsg}`);
     }
 
     res.json({ response: `AI Provider '${provider}' not supported on backend.` });
