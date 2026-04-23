@@ -2,17 +2,25 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import MonacoEditor, { OnMount } from '@monaco-editor/react';
 import { useStore, FileNode } from '../store';
 import { Project } from '../types';
-import { Loader2, Save, Cloud } from 'lucide-react';
+import { Loader2, Save, Cloud, Zap } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { storageService } from '../lib/storageService';
 import { editor } from 'monaco-editor';
+import { LearaLogo } from './LearaLogo';
+import { cn } from '../lib/utils';
 
 export function Editor() {
-  const { activeFile, setActiveFile, userId, theme, activeProject, editorHighlightQuery, setEditorHighlightQuery, editorScrollLine, setEditorScrollLine } = useStore();
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<string[]>([]);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const { 
+    activeFile, setActiveFile, userId, theme, activeProject, 
+    editorHighlightQuery, setEditorHighlightQuery, 
+    editorScrollLine, setEditorScrollLine,
+    setSidebarTab, setIsAIPanelOpen 
+  } = useStore();
 
   useEffect(() => {
     if (!editorRef.current || !editorHighlightQuery) {
@@ -139,13 +147,82 @@ export function Editor() {
     editor.layout();
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (activeFile) return;
+
+      // Ctrl + Shift + F (Global Search)
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setSidebarTab('search');
+        toast.info('Opening Global Search');
+      }
+      
+      // Ctrl + P (Quick Open / Explorer)
+      if (e.ctrlKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setSidebarTab('explorer');
+        toast.info('Quick Open Explorer');
+      }
+
+      // Ctrl + L (AI Assistant)
+      if (e.ctrlKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        setIsAIPanelOpen(true);
+        toast.info('Invoking AI Assistant');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeFile, setSidebarTab, setIsAIPanelOpen]);
+
   if (!activeFile) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-[#1e1e1e] text-zinc-500 space-y-4">
-        <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center">
-          <Loader2 className="w-8 h-8 opacity-20" />
+      <div className={cn(
+        "h-full w-full flex flex-col items-center transition-colors duration-300 px-6 pb-8 overflow-hidden",
+        theme === 'dark' ? "bg-[#1e1e1e]" : "bg-[#f5f5f5]"
+      )}>
+        
+        {/* Top Spacer to push branding down */}
+        <div className="flex-1 w-full" />
+
+        {/* Math-Centered Branding Area */}
+        <div className="flex flex-col items-center justify-center shrink-0 py-8">
+          <div className="flex flex-col items-center opacity-[0.25] hover:opacity-45 transition-all duration-700 pointer-events-none group/logo select-none">
+            <div className="mb-5 grayscale scale-[1.6] group-hover/logo:scale-[1.7] transition-all duration-1000">
+              <LearaLogo size="lg" showText={false} />
+            </div>
+            <p className="text-[10px] uppercase tracking-[0.6em] font-black opacity-40 text-center ml-[0.6em]">Desktop Workspace</p>
+          </div>
         </div>
-        <p className="text-sm">Select a file from the explorer to start coding</p>
+
+        {/* Middle Spacer to add professional distance */}
+        <div className="h-1 shrink-0" />
+
+        {/* Bottom Shortcuts Area - Pinned and spaced properly */}
+        <div className="w-full max-w-[220px] shrink-0 pb-12">
+          <div className="w-full border-t border-black/5 dark:border-white/5 pt-4 space-y-2">
+            {[
+              { label: 'File Search', keys: ['Ctrl', 'P'] },
+              { label: 'Global Search', keys: ['Ctrl', 'Shift', 'F'] },
+              { label: 'AI Assistant', keys: ['Ctrl', 'L'] },
+            ].map((item, i) => (
+              <div key={i} className="flex items-center justify-between opacity-[0.25] hover:opacity-75 transition-opacity cursor-default group/key">
+                <span className="text-[8px] font-bold uppercase tracking-[0.2em]">{item.label}</span>
+                <div className="flex items-center gap-1.5 opacity-80">
+                  {item.keys.map((key, ki) => (
+                    <React.Fragment key={ki}>
+                      <span className="text-[8px] font-mono font-bold leading-none">{key}</span>
+                      {ki < item.keys.length - 1 && <span className="text-[7px] opacity-40">+</span>}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        
       </div>
     );
   }
