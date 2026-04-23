@@ -276,7 +276,7 @@ export const useStore = create<AppState>((set) => ({
   isHelpModalOpen: false,
   setIsHelpModalOpen: (open) => set({ isHelpModalOpen: open }),
 
-  sidebarWidth: 260,
+  sidebarWidth: 220,
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
 
   sidebarPosition: 'left',

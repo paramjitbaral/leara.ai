@@ -50,7 +50,7 @@ export default function App() {
     }
   }, [theme]);
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
-  const [terminalHeight, setTerminalHeight] = useState(200);
+  const [terminalHeight, setTerminalHeight] = useState(160);
   const [isResizing, setIsResizing] = useState(false);
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
   const [isPreviewResizing, setIsPreviewResizing] = useState(false);
