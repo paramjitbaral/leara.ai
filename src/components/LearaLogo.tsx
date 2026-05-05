@@ -24,17 +24,21 @@ export function LearaLogo({ size = 'md', className, showText = true }: LearaLogo
     <div className={cn("flex items-center gap-3 shrink-0", className)}>
       <div className={cn("relative transition-transform hover:scale-105", currentSize.container)}>
         <img 
-          src="/logo.png" 
+          src="logo.png" 
           className="w-full h-full object-contain absolute inset-0 z-10" 
+          onLoad={(e) => {
+            const fallback = e.currentTarget.parentElement?.querySelector('.logo-fallback');
+            if (fallback) (fallback as HTMLElement).style.display = 'none';
+          }}
           onError={(e) => {
-            e.currentTarget.style.display = 'none';
+            console.error('Logo failed to load:', e.currentTarget.src);
             const fallback = e.currentTarget.parentElement?.querySelector('.logo-fallback');
             if (fallback) (fallback as HTMLElement).style.display = 'flex';
           }}
           alt="Leara.ai"
         />
         <div className={cn(
-          "logo-fallback absolute inset-0 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl hidden items-center justify-center text-white shadow-lg shadow-emerald-500/20",
+          "logo-fallback absolute inset-0 bg-gradient-to-br from-sky-500 to-emerald-600 rounded-xl hidden items-center justify-center text-white shadow-lg",
           currentSize.container
         )}>
           <Zap className={currentSize.icon} />
@@ -43,9 +47,9 @@ export function LearaLogo({ size = 'md', className, showText = true }: LearaLogo
       
       {showText && (
         <h1 className={cn(
-          "font-bold tracking-tighter",
+          "font-black tracking-tighter",
           currentSize.text,
-          theme === 'dark' ? "text-white" : "text-zinc-900"
+          "text-white"
         )}>
           <span className="text-sky-500">Leara</span><span className="text-emerald-500">.ai</span>
         </h1>

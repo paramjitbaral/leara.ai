@@ -21,3 +21,9 @@ firestore-debug.log
 ui-debug.log
 firebase-debug.log*
 .firebase/
+
+# Build and Release
+release/
+dist-electron/
+dist-server/
+dist/

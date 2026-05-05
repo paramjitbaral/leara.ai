@@ -12,6 +12,16 @@ export interface FileNode {
   language?: string;
 }
 
+export interface Problem {
+  id: string;
+  fileId: string;
+  fileName: string;
+  message: string;
+  line: number;
+  column: number;
+  severity: 'error' | 'warning' | 'info';
+}
+
 export type AIMode = 'explain' | 'practice' | 'build';
 
 export interface AIPreset {
@@ -97,6 +107,12 @@ interface AppState {
   terminalType: 'server' | 'browser';
   setTerminalType: (type: 'server' | 'browser') => void;
 
+  lastStatusUpdateTime: number;
+  triggerStatusUpdate: () => void;
+
+  scmChangedFiles: string[];
+  setScmChangedFiles: (files: string[]) => void;
+
   isPreviewOpen: boolean;
   setIsPreviewOpen: (open: boolean) => void;
   previewUrl: string | null;
@@ -123,8 +139,8 @@ interface AppState {
   editorHighlightQuery: string;
   setEditorHighlightQuery: (query: string) => void;
 
-  sidebarTab: 'explorer' | 'search';
-  setSidebarTab: (tab: 'explorer' | 'search') => void;
+  sidebarTab: 'explorer' | 'search' | 'scm' | 'ops';
+  setSidebarTab: (tab: 'explorer' | 'search' | 'scm' | 'ops') => void;
 
   editorScrollLine: number | null;
   setEditorScrollLine: (line: number | null) => void;
@@ -132,6 +148,9 @@ interface AppState {
   chatHistories: Record<string, any[]>;
   setProjectMessages: (projectId: string, messages: any[]) => void;
   clearProjectMessages: (projectId: string) => void;
+  
+  refreshFiles: number;
+  triggerRefreshFiles: () => void;
 
   isTerminalOpen: boolean;
   setIsTerminalOpen: (open: boolean) => void;
@@ -140,11 +159,16 @@ interface AppState {
   
   terminals: { id: string; type: 'server' | 'browser'; name: string }[];
   activeTerminalId: string | null;
-  addTerminal: (type?: 'server' | 'browser') => void;
+  addTerminal: (type?: 'server' | 'browser', name?: string) => void;
   removeTerminal: (id: string) => void;
   setActiveTerminalId: (id: string) => void;
 
   updateFileContent: (fileId: string, content: string) => void;
+
+  problems: Problem[];
+  setProblems: (problems: Problem[]) => void;
+  bottomPanelTab: 'terminal' | 'problems';
+  setBottomPanelTab: (tab: 'terminal' | 'problems') => void;
 }
 
 const getInitialTheme = (): 'dark' | 'light' => {
@@ -232,6 +256,7 @@ export const useStore = create<AppState>((set) => ({
       );
       state.updateOriginalContent(fileId, content);
       state.setModified(fileId, false);
+      state.triggerStatusUpdate();
     } catch (err) {
       console.error('Failed to save file:', err);
       toast.error(`Failed to save ${fileId}`);
@@ -298,6 +323,12 @@ export const useStore = create<AppState>((set) => ({
     localStorage.setItem('ai-model', model);
     set({ aiModel: model });
   },
+
+  lastStatusUpdateTime: Date.now(),
+  triggerStatusUpdate: () => set({ lastStatusUpdateTime: Date.now() }),
+
+  scmChangedFiles: [],
+  setScmChangedFiles: (files: string[]) => set({ scmChangedFiles: files }),
 
   isApiKeyModalOpen: false,
   setIsApiKeyModalOpen: (open) => set({ isApiKeyModalOpen: open }),
@@ -391,6 +422,9 @@ export const useStore = create<AppState>((set) => ({
     chatHistories: { ...state.chatHistories, [projectId]: [] }
   })),
 
+  refreshFiles: 0,
+  triggerRefreshFiles: () => set((state) => ({ refreshFiles: state.refreshFiles + 1 })),
+
   isTerminalOpen: true,
   setIsTerminalOpen: (open) => set({ isTerminalOpen: open }),
   terminalCommand: null,
@@ -398,9 +432,9 @@ export const useStore = create<AppState>((set) => ({
 
   terminals: [{ id: 'term-1', type: 'server', name: 'bash' }],
   activeTerminalId: 'term-1',
-  addTerminal: (type = 'server') => set((state) => {
+  addTerminal: (type = 'server', name) => set((state) => {
     const id = `term-${Date.now()}`;
-    const newTerminal = { id, type, name: type === 'server' ? 'bash' : 'jsh' };
+    const newTerminal = { id, type, name: name || (type === 'server' ? 'bash' : 'jsh') };
     return {
       terminals: [...state.terminals, newTerminal],
       activeTerminalId: id,
@@ -420,4 +454,9 @@ export const useStore = create<AppState>((set) => ({
     };
   }),
   setActiveTerminalId: (id) => set({ activeTerminalId: id }),
+
+  problems: [],
+  setProblems: (problems) => set({ problems }),
+  bottomPanelTab: 'terminal',
+  setBottomPanelTab: (tab) => set({ bottomPanelTab: tab }),
 }));

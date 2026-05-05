@@ -80,11 +80,13 @@ export function Editor() {
         activeFile.language
       );
       console.log('File saved across all layers');
+      // Trigger SCM and other panel updates
+      useStore.getState().triggerStatusUpdate();
     } catch (err) {
       console.error('Failed to save file:', err);
       toast.error('Failed to save changes');
     }
-  }, [activeFile, userId, activeProject, setModified]);
+  }, [activeFile, userId, activeProject]);
 
   // Cleanup on unmount or file change
   useEffect(() => {
@@ -107,12 +109,6 @@ export function Editor() {
     setModified(activeFile.id, newContent !== original);
     
     clearHighlight();
-
-    // Debounced auto-save
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => {
-      handleSave(newContent);
-    }, 1000);
   };
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
@@ -120,6 +116,15 @@ export function Editor() {
 
     editor.onMouseDown(() => clearHighlight());
     editor.onKeyDown(() => clearHighlight());
+
+    // Manual Save Keybinding (Ctrl + S)
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      const content = editor.getValue();
+      handleSave(content);
+      toast.success('File saved manually', {
+        icon: <Save className="w-4 h-4 text-emerald-500" />
+      });
+    });
 
     // Add Context Menu Actions
     editor.addAction({
@@ -186,29 +191,23 @@ export function Editor() {
   if (!activeFile) {
     return (
       <div className={cn(
-        "h-full w-full flex flex-col items-center transition-colors duration-300 px-6 pb-8 overflow-hidden",
+        "h-full w-full flex flex-col items-center justify-center transition-colors duration-300 px-6 overflow-hidden",
         theme === 'dark' ? "bg-[#1e1e1e]" : "bg-[#f5f5f5]"
       )}>
         
-        {/* Top Spacer to push branding down */}
-        <div className="flex-1 w-full" />
-
-        {/* Math-Centered Branding Area */}
-        <div className="flex flex-col items-center justify-center shrink-0 py-8">
+        {/* Branding Area */}
+        <div className="flex flex-col items-center justify-center shrink-0 py-12">
           <div className="flex flex-col items-center opacity-[0.25] hover:opacity-45 transition-all duration-700 pointer-events-none group/logo select-none">
-            <div className="mb-5 grayscale scale-[1.6] group-hover/logo:scale-[1.7] transition-all duration-1000">
+            <div className="mb-6 grayscale scale-[1.6] group-hover/logo:scale-[1.7] transition-all duration-1000">
               <LearaLogo size="lg" showText={false} />
             </div>
             <p className="text-[10px] uppercase tracking-[0.6em] font-black opacity-40 text-center ml-[0.6em]">Desktop Workspace</p>
           </div>
         </div>
 
-        {/* Middle Spacer to add professional distance */}
-        <div className="h-1 shrink-0" />
-
-        {/* Bottom Shortcuts Area - Pinned and spaced properly */}
-        <div className="w-full max-w-[220px] shrink-0 pb-12">
-          <div className="w-full border-t border-black/5 dark:border-white/5 pt-4 space-y-2">
+        {/* Shortcuts Area - Centered and spaced properly */}
+        <div className="w-full max-w-[240px] shrink-0">
+          <div className="w-full border-t border-black/5 dark:border-white/5 pt-6 space-y-3">
             {[
               { label: 'File Search', keys: ['Ctrl', 'P'] },
               { label: 'Global Search', keys: ['Ctrl', 'Shift', 'F'] },

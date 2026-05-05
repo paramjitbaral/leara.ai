@@ -13,7 +13,8 @@ import { storageService } from '../lib/storageService';
 export function FileExplorer() {
   const {
     userId, files, setFiles, addOpenFile, removeOpenFile, setActiveFile, activeFile,
-    setCurrentView, activeProject, theme, setEditorHighlightQuery, setSidebarTab, modifiedFiles
+    setCurrentView, activeProject, theme, setEditorHighlightQuery, setSidebarTab, modifiedFiles,
+    refreshFiles
   } = useStore();
   const [loading, setLoading] = useState(false);
   const [githubUrl, setGithubUrl] = useState('');
@@ -88,7 +89,7 @@ export function FileExplorer() {
 
   useEffect(() => {
     if (userId) fetchFiles();
-  }, [fetchFiles, userId, activeProject]);
+  }, [fetchFiles, userId, activeProject, refreshFiles]);
 
   const toggleExpand = (id: string) => {
     const newExpanded = new Set(expanded);

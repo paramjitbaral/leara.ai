@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 // Configuration from environment variables for production/Vercel
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || (typeof window !== 'undefined' ? window.location.hostname : null),
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "ai-studio-applet-webapp-24ad3.firebaseapp.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
@@ -62,10 +62,13 @@ export const signIn = async (useRedirect = false) => {
   }
 
   try {
-    if (useRedirect) {
-      console.log('Firebase: Attempting signInWithRedirect...');
+    const isElectron = typeof window !== 'undefined' && window.navigator.userAgent.toLowerCase().includes('electron');
+    
+    if (useRedirect || isElectron) {
+      console.log('Firebase: Attempting signInWithRedirect (Desktop Optimized)...');
       return await signInWithRedirect(auth, googleProvider);
     }
+
     console.log('Firebase: Attempting signInWithPopup...');
     const result = await signInWithPopup(auth, googleProvider);
     console.log('Firebase: signInWithPopup successful');
@@ -77,10 +80,14 @@ export const signIn = async (useRedirect = false) => {
     let description = error.message;
     if (error.code === 'auth/popup-blocked-by-user' || error.code === 'auth/cancelled-by-user') {
       return null; // Silent cancel
+    } else if (error.code === 'auth/popup-blocked') {
+      description = 'Login popup was blocked by the app. Trying redirect mode...';
+      toast.info('Switching to Redirect Mode', { description });
+      return await signInWithRedirect(auth, googleProvider);
     } else if (error.code === 'auth/unauthorized-domain') {
-      description = 'This domain is not authorized in Firebase Console. Add localhost:3000 to Authorized Domains.';
-    } else if (error.code === 'auth/popup-closed-by-user') {
-      description = 'Login window closed before completion.';
+      const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'unknown';
+      description = `Domain "${currentHost}" is not authorized. Please add it to Authorized Domains in Firebase Console > Authentication > Settings.`;
+      console.error('Firebase: Unauthorized domain detected:', currentHost);
     }
 
     toast.error('Sign In Failed', {

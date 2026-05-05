@@ -516,3 +516,20 @@ body.light .search-highlight {
   color: #064e3b !important;
   text-shadow: none;
 }
+
+/* ===== Learning Mode: Light Theme Support ===== */
+/* Make the code block backgrounds light when in light mode */
+body.light .bg-\[\#0d1117\] {
+  background-color: var(--color-zinc-50) !important;
+  border-color: var(--color-zinc-200) !important;
+}
+
+body.light .bg-\[\#161b22\] {
+  background-color: white !important;
+  border-color: var(--color-zinc-200) !important;
+}
+
+body.light .text-zinc-600 {
+  color: var(--color-zinc-400) !important;
+}
+

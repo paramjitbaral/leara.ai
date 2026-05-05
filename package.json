@@ -3,15 +3,45 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "dist-electron/main.cjs",
   "scripts": {
-    "dev": "nodemon --watch server.ts --watch src/ --ignore workspace/ --exec tsx server.ts",
-    "build": "vite build",
+    "dev": "nodemon --watch server.ts --watch backend/ --watch src/ --ignore workspace/ --exec tsx server.ts",
+    "build": "vite build && tsup server.ts --format esm --outDir dist-server --clean --external @homebridge/node-pty-prebuilt-multiarch && tsup electron/main.ts --format cjs --outDir dist-electron --clean --external electron",
     "preview": "vite preview",
-    "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "clean": "rm -rf dist dist-electron dist-server",
+    "lint": "tsc --noEmit",
+    "electron:dev": "concurrently \"npm run dev\" \"npm run electron:start\"",
+    "electron:start": "tsup electron/main.ts --format cjs --outDir dist-electron --watch --onSuccess \"electron .\"",
+    "electron:build": "npm run build && electron-builder"
+  },
+  "build": {
+    "appId": "com.leara.core",
+    "productName": "Leara Core",
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist-server/server.js",
+        "to": "app.asar.unpacked/server.js"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    }
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
+    "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
     "@monaco-editor/react": "^4.7.0",
     "@radix-ui/react-context-menu": "^2.2.16",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -55,8 +85,12 @@
     "@types/node": "^22.14.0",
     "@types/ws": "^8.18.1",
     "autoprefixer": "^10.4.21",
+    "electron": "^41.5.0",
+    "electron-builder": "^26.8.1",
+    "electron-rebuild": "^3.2.9",
     "nodemon": "^3.1.14",
     "tailwindcss": "^4.1.14",
+    "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"

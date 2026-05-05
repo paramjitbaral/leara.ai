@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useStore } from '../store';
-import { cn } from '../lib/utils';
+import { useStore, FileNode } from '../store';
+import { cn, smartMergeCode } from '../lib/utils';
+import axios from 'axios';
 import { Send, Sparkles, Bug, Zap, PlusCircle, Loader2, User, Bot, X, LayoutDashboard, Plus, Mic, ArrowUp, ChevronDown, Cpu, Globe, Monitor, Link, Check, GraduationCap, BrainCircuit, Terminal, Play, Copy, FileCode, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -26,86 +27,65 @@ const SLASH_COMMANDS = [
 
 // Shell command block → shows Run in Terminal + live output
 function ShellBlock({ code }: { code: string }) {
-  const { theme, setIsTerminalOpen, setTerminalCommand } = useStore();
-  const [output, setOutput] = useState('');
-  const [running, setRunning] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const run = async () => {
-    setOutput('');
-    setRunning(true);
-    try {
-      const res = await fetch('/api/terminal/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: code.trim() }),
-      });
-      const reader = res.body?.getReader();
-      const dec = new TextDecoder();
-      if (!reader) return;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        setOutput(p => p + dec.decode(value, { stream: true }));
-      }
-    } catch (e: any) { setOutput(`Error: ${e.message}`); }
-    finally { setRunning(false); }
-  };
+  const { theme, setIsTerminalOpen, setTerminalCommand, addTerminal, terminals } = useStore();
 
-  const runSystem = () => {
+  const run = () => {
     setIsTerminalOpen(true);
+    if (terminals.length === 0) {
+      addTerminal('server');
+    }
     setTerminalCommand(code.trim());
-    toast.success('Command sent to system terminal');
+    toast.success('Command sent to terminal');
+
+    // Trigger file refreshes to catch disk changes (e.g. npm install)
+    const { triggerRefreshFiles } = useStore.getState();
+    setTimeout(triggerRefreshFiles, 2000);
+    setTimeout(triggerRefreshFiles, 5000);
+    setTimeout(triggerRefreshFiles, 10000);
   };
 
   const copy = () => { navigator.clipboard.writeText(code.trim()); setCopied(true); setTimeout(() => setCopied(false), 1500); };
 
   return (
     <div className={cn(
-      "my-3 rounded-lg overflow-hidden border font-mono text-[11px] transition-colors",
-      theme === 'dark' ? "border-white/[0.08]" : "border-zinc-200"
+      "my-1 rounded-lg overflow-hidden border font-mono text-[11px] transition-colors",
+      theme === 'dark' ? "border-white/[0.08] bg-[#0d0d0d]" : "border-zinc-200 bg-white"
     )}>
+      {/* Header */}
       <div className={cn(
-        "flex items-center justify-between px-2 py-1 gap-2 transition-colors",
-        theme === 'dark' ? "bg-[#111111]" : "bg-white border-b"
+        "flex items-center justify-between px-2.5 py-1 transition-colors border-b",
+        theme === 'dark' ? "bg-[#161616] border-white/[0.05]" : "bg-zinc-100 border-zinc-200"
       )}>
-        <div className="flex items-center gap-1.5 min-w-0 flex-1 px-1">
-          <Terminal className="w-2.5 h-2.5 text-zinc-500 shrink-0" />
-          <span className={cn("truncate text-[9px] font-mono font-medium", theme === 'dark' ? "text-zinc-400" : "text-zinc-600")}>{code.trim()}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <Terminal className="w-3 h-3 text-zinc-500 shrink-0" />
+          <span className="text-[8px] uppercase tracking-widest font-bold text-zinc-500 truncate">Terminal</span>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button onClick={copy} title="Copy" className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors">
+        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          <button onClick={copy} className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors" title="Copy">
             {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
           </button>
           
           <button
-            onClick={runSystem}
-            className="flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-500/10 border border-zinc-500/20 text-zinc-400 hover:text-white hover:bg-zinc-500/20 transition-all text-[8px] font-bold uppercase tracking-tight"
-            title="Run in System Terminal"
+            onClick={run}
+            className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all text-[8px] font-bold uppercase tracking-tight"
+            title="Run in Terminal"
           >
             <Play className="w-2.5 h-2.5" />
-            Terminal
-          </button>
-
-          <button
-            onClick={run}
-            disabled={running}
-            className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all text-[8px] font-bold uppercase tracking-tight disabled:opacity-40"
-          >
-            {running ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Zap className="w-2.5 h-2.5 text-emerald-500" />}
-            {running ? '...' : 'Inline'}
+            Run in Terminal
           </button>
         </div>
       </div>
-      {(output || running) && (
-        <div className={cn(
-          "px-3 py-2.5 text-zinc-400 whitespace-pre-wrap max-h-[200px] overflow-y-auto border-t leading-relaxed transition-colors",
-          theme === 'dark' ? "bg-[#0d0d0d] border-white/[0.05]" : "bg-white border-zinc-100"
-        )}>
-          {output}
-          {running && <span className="animate-pulse text-emerald-600">▊</span>}
-        </div>
-      )}
+
+      {/* Command Body */}
+      <pre className={cn(
+        "px-3 py-3 overflow-x-auto max-h-[100px] overflow-y-auto leading-relaxed transition-colors m-0 border-none bg-transparent whitespace-pre",
+        theme === 'dark' ? "text-zinc-300" : "text-zinc-800"
+      )}>
+        <code className="bg-transparent p-0 m-0 border-none">{code.trim()}</code>
+      </pre>
+
     </div>
   );
 }
@@ -123,7 +103,7 @@ function CodeBlock({ code, lang, onApply }: { code: string; lang?: string; onApp
 
   return (
     <div className={cn(
-      "my-3 rounded-lg overflow-hidden border font-mono text-[11px] transition-colors",
+      "my-1 rounded-lg overflow-hidden border font-mono text-[11px] transition-colors",
       theme === 'dark' ? "border-white/[0.08]" : "border-zinc-200"
     )}>
       <div className={cn(
@@ -147,7 +127,7 @@ function CodeBlock({ code, lang, onApply }: { code: string; lang?: string; onApp
         </div>
       </div>
       <pre className={cn(
-        "px-3 py-3 overflow-x-auto max-h-[300px] overflow-y-auto leading-relaxed whitespace-pre transition-colors",
+        "px-3 py-3 overflow-x-auto max-h-[300px] overflow-y-auto leading-relaxed transition-colors whitespace-pre",
         theme === 'dark' ? "bg-[#0d0d0d] text-zinc-300" : "bg-white text-zinc-800"
       )}>
         <code>{code}</code>
@@ -173,6 +153,12 @@ export function CopilotPanel() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [agentState, setAgentState] = useState<{
+    pendingTool: any | null;
+    history: any[];
+    initialSteps: string[];
+    task: string;
+  } | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [showCommands, setShowCommands] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -287,26 +273,24 @@ export function CopilotPanel() {
 `;
 
       const systemInstructions = {
-        build: `${commonRules}
-- Mode: BUILD & OPERATE (Agentic Reasoning).
-- YOUR PRIMARY DIRECTIVE: Persistence and Logical Success.
-- YOU DO NOT GIVE UP. But you must not retry blindly.
-- LOGICAL REASONING LOOP: Before providing a fix for a failed task, you MUST perform a mental check:
-  1. ANALYZE the exact error output received.
-  2. DIAGNOSE the root cause (is it a missing dependency? a path issue? a syntax error?).
-  3. EVALUATE alternative approaches (can you use a different command? is there a better configuration?).
-- After this analysis, provide the most logical next step. Briefly explain your reasoning so the user understands your strategy.
-- If the user asks to "run" or "start", ensure you check package.json and the file structure carefully to provide the correct command.
-- If it fails, treat the failure output as a high-fidelity signal. Do not guess; use the log to fix the logic.
+        build: `You are Leara Core, a world-class autonomous AI engineer.
+- MODE: BUILD & OPERATE (Agentic Reasoning).
+- PLATFORM: Windows. Use Windows-compatible commands.
+- CONTRACT: You MUST output a JSON object following the tool contract.
+- TOOL USE: When you want to act, you must output the exact JSON structure: { "thought": "...", "action": { "type": "tool", "tool": { "name": "...", "args": {} } } }.
+- PROPER IDE LOGIC: When generating or fixing a project, always ensure a professional, logical structure (e.g. 'src' folder, 'public' folder).
+- SCRIPT STANDARDS: Every Node.js project MUST include standard scripts in package.json: "dev", "start", and "build".
+- FAST TOOLS: Prefer modern, high-performance tools (like Vite for web, Vitest for testing, or pnpm for installs) to ensure the user gets a fast, VS Code-like experience.
+- If a project is missing a 'dev' script, you must proactively offer to add it.
+- NEVER leave a project in an un-runnable state. Always provide the necessary config files.
 
 ${projectContext}
 ${fileContext}`,
 
         practice: `${commonRules}
 - Mode: MENTOR & TEACH.
-- Guide the user to learn by explaining the patterns and principles.
+- Guide the user to learn by explaining patterns and principles.
 - Use analogies and clear documentation references.
-- Ask challenging questions to test their knowledge.
 - Help them debug by pointing them to where the error is first, then showing the fix.
 
 ${projectContext}
@@ -316,122 +300,124 @@ ${fileContext}`,
 - Mode: EXPLAIN & ANALYZE.
 - Provide deep architectural and logical breakdowns of the code.
 - Reference specific lines and functions in the active file.
-- Visualize flows using text-based diagrams or lists.
-- Do not provide implementation code unless asked for an example.
 
 ${projectContext}
 ${fileContext}`,
       };
 
-      const runAgenticLoop = async (initialResponse: string) => {
-        let currentResponse = initialResponse;
-        let loopCount = 0;
-        const MAX_LOOPS = 5;
+      if (aiMode === 'build' || type === 'build' || type === 'tests') {
+        const agentRes = await fetch('/api/agent/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: currentInput || type,
+            context: {
+              projectContext,
+              fileContext,
+              activeFileId: activeFile?.id || null,
+              activeFileName: activeFile?.name || null,
+              aiMode,
+            },
+            userId: useStore.getState().userId,
+            folder: activeProject?.folderName,
+            provider: aiProvider,
+            apiKey: resolvedKey,
+            model: aiModel,
+            endpoint: useStore.getState().aiEndpoint,
+            systemInstruction: systemInstructions.build,
+            maxIterations: 15,
+            interactive: true,
+            history: agentState?.history || [],
+            initialSteps: agentState?.initialSteps || [],
+          })
+        });
 
-        // Add the initial AI response to chat
-        setMessages(prev => [...prev, { role: 'assistant', content: currentResponse }]);
+        const agentData = await agentRes.json();
+        if (agentData.error) throw new Error(agentData.error);
 
-        while (loopCount < MAX_LOOPS) {
-          // Robust detection: Look for <tool_call> or similar, even if unclosed
-          const regex = /<tool_call>([\s\S]*?)(?:<\/tool_call>|$)/i;
-          const toolMatch = currentResponse.match(regex);
-          if (!toolMatch) break; 
+        // Update agent state for next turn
+        setAgentState({
+          pendingTool: agentData.pendingTool,
+          history: agentData.logs || [],
+          initialSteps: agentData.initialSteps || [],
+          task: currentInput || type,
+        });
 
-          let rawData = toolMatch[1].trim();
-          // Clean up "cmd" prefix if AI adds it
-          if (rawData.startsWith('cmd')) rawData = rawData.substring(3).trim();
-
-          let toolData;
-          try {
-            toolData = JSON.parse(rawData);
-          } catch (e) {
-            console.warn("Fuzzy JSON parse attempt...");
-            // Try to extract content between first { and last }
-            const jsonPart = rawData.match(/\{[\s\S]*\}/);
-            if (jsonPart) {
-              try { toolData = JSON.parse(jsonPart[0]); } catch (e2) {}
-            }
+        let combinedContent = "";
+        for (const log of agentData.logs || []) {
+          if (log.tool?.name) {
+            combinedContent += `**Action:** ${log.tool.name}\n`;
           }
-
-          if (toolData && (toolData.name || toolData.command)) {
-            const command = toolData.command || (toolData.arguments?.command);
-            
-            if (command) {
-              // 1. Show status in UI
-              setMessages(prev => [...prev, { role: 'assistant', content: `⚙️ **Executing:** \`${command}\`...`, type: 'build' }]);
-              
-              // 2. Mirror to visual terminal so user sees it live
-              if (command.includes('npm') || command.includes('run') || command.includes('start')) {
-                useStore.getState().setTerminalCommand(command);
-              }
-
-              // 3. Call backend exec
-              const execRes = await fetch('/api/terminal/exec', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  command,
-                  userId: useStore.getState().userId,
-                  folder: activeProject?.folderName
-                })
-              });
-              const execData = await execRes.json();
-              const outputText = `Output:\n${execData.stdout}\n${execData.stderr || ''}`;
-
-              // 4. Show output to user in chat too
-              setMessages(prev => [...prev, { 
-                role: 'assistant', 
-                content: `\`\`\`terminal\n${execData.stdout?.substring(0, 1000)}${execData.stdout?.length > 1000 ? '...' : ''}\n${execData.stderr || ''}\n\`\`\`` 
-              }]);
-
-              // 5. Feed back to AI
-              const nextRes = await fetch('/api/ai/copilot', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  prompt: `Command Result: \n${outputText}\n\nContinue.`,
-                  provider: aiProvider,
-                  apiKey: resolvedKey,
-                  model: aiModel,
-                  endpoint: useStore.getState().aiEndpoint,
-                  systemInstruction: systemInstructions[aiMode]
-                })
-              });
-              const nextData = await nextRes.json();
-              if (nextData.error) throw new Error(nextData.error);
-
-              currentResponse = nextData.response;
-              setMessages(prev => [...prev, { role: 'assistant', content: currentResponse }]);
-              loopCount++;
-            } else {
-              break;
-            }
-          } else {
-            break; 
+          if (log.output) {
+            combinedContent += `\`\`\`terminal\n${String(log.output).slice(0, 1000)}\n\`\`\`\n`;
           }
         }
-      };
 
-      const res = await fetch('/api/ai/copilot', {
+        if (agentData.pendingTool) {
+          combinedContent += `\n**Proposed:** ${agentData.pendingTool.name} (${JSON.stringify(agentData.pendingTool.args)})\n*Waiting for approval...*`;
+        } else {
+          combinedContent += `\n---\n**Summary:** ${agentData.summary}\n*Completed in ${agentData.iterations} iterations.*`;
+        }
+
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          type: 'build',
+          content: combinedContent
+        }]);
+      } else {
+        const res = await fetch('/api/ai/copilot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: currentInput || type,
+            provider: aiProvider,
+            apiKey: resolvedKey,
+            model: aiModel,
+            endpoint: useStore.getState().aiEndpoint,
+            systemInstruction: systemInstructions[aiMode]
+          })
+        });
+
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+      }
+    } catch (err: any) {
+      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleExecuteTool = async () => {
+    if (!agentState?.pendingTool) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/agent/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: currentInput || type,
-          provider: aiProvider,
-          apiKey: resolvedKey,
-          model: aiModel,
-          endpoint: useStore.getState().aiEndpoint,
-          systemInstruction: systemInstructions[aiMode]
+          tool: agentState.pendingTool,
+          userId,
+          folder: activeProject?.folderName,
         })
       });
-
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
-      // Start the Agentic Loop
-      await runAgenticLoop(data.response);
+      // Append tool output to the history
+      const lastLog = agentState.history[agentState.history.length - 1];
+      if (lastLog) {
+        lastLog.output = data.output;
+        lastLog.status = "ok";
+      }
+
+      setAgentState(prev => prev ? { ...prev, pendingTool: null } : null);
+      
+      // Auto-trigger next step
+      handleSend(agentState.task as any);
     } catch (err: any) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
+      toast.error(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -489,7 +475,7 @@ ${fileContext}`,
       </div>
 
       {/* Professional Chat Area */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 scroll-smooth" ref={scrollRef}>
+      <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1 scroll-smooth" ref={scrollRef}>
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-40">
             <Bot className="w-10 h-10" />
@@ -527,7 +513,7 @@ ${fileContext}`,
             )}>
               {msg.role === 'user' ? (
                 <span className={cn(
-                  "inline-block px-3 py-1.5 rounded-2xl text-left transition-all max-w-[90%]",
+                  "inline-block px-3 py-1.5 rounded-2xl text-left transition-all max-w-[95%] break-all",
                   theme === 'dark'
                     ? "bg-white/[0.08] text-zinc-200 border border-white/5"
                     : "bg-zinc-100 text-zinc-900 border border-zinc-200 shadow-sm"
@@ -546,19 +532,100 @@ ${fileContext}`,
                             <SmartCodeRenderer
                               lang={lang}
                               code={codeStr}
-                              onApply={(code) => {
+                              onApply={async (code) => {
                                 if (activeFile) {
-                                  const updated = (activeFile.content || '') + '\n' + code;
+                                  const currentContent = activeFile.content || '';
+                                  const updated = smartMergeCode(currentContent, code);
+                                  
+                                  if (updated === currentContent) {
+                                     toast.info('No changes needed (code already exists)');
+                                     return;
+                                  }
+
                                   useStore.getState().updateFileContent(activeFile.id, updated);
                                   toast.success('Code applied to ' + activeFile.name);
+
+                                  // Heuristic: try to highlight/scroll to the change
+                                  const lines = code.split('\n').filter(l => l.trim().length > 3);
+                                  if (lines.length > 0) {
+                                     const firstLine = lines[0].trim();
+                                     const newLines = updated.split('\n');
+                                     const lineIdx = newLines.findIndex(l => l.includes(firstLine));
+                                     if (lineIdx !== -1) {
+                                        useStore.getState().setEditorScrollLine(lineIdx + 1);
+                                        useStore.getState().setEditorHighlightQuery(firstLine);
+                                     }
+                                  }
                                 } else {
-                                  toast.error('No file open in editor');
+                                  // SMART FILE DISCOVERY: If no file is open, try to find one mentioned in the message
+                                  const allFiles = useStore.getState().files;
+                                  const fileRegex = /([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/g;
+                                  const matches = msg.content.match(fileRegex);
+                                  
+                                  const findNode = (nodes: FileNode[], targetName: string): FileNode | null => {
+                                    for (const node of nodes) {
+                                      if (node.type === 'file' && (node.name === targetName || node.id.endsWith(targetName))) return node;
+                                      if (node.type === 'directory' && node.children) {
+                                        const found = findNode(node.children, targetName);
+                                        if (found) return found;
+                                      }
+                                    }
+                                    return null;
+                                  };
+
+                                  let discoveredFile: FileNode | null = null;
+                                  if (matches) {
+                                    for (const match of matches) {
+                                      const fileName = match.split('/').pop() || match;
+                                      const node = findNode(allFiles, fileName);
+                                      if (node) { discoveredFile = node; break; }
+                                    }
+                                  }
+
+                                  if (discoveredFile) {
+                                    try {
+                                      // 1. Fetch content if missing
+                                      let content = discoveredFile.content;
+                                      if (!content) {
+                                        const res = await axios.get(`/api/files/content?userId=${userId}&path=${discoveredFile.id}`);
+                                        content = res.data.content;
+                                      }
+                                      
+                                      // 2. Open and set as active
+                                      const ext = discoveredFile.name.split('.').pop()?.toLowerCase();
+                                      const languageMap: Record<string, string> = {
+                                        'js': 'javascript', 'jsx': 'javascript', 'ts': 'typescript', 'tsx': 'typescript',
+                                        'py': 'python', 'html': 'html', 'css': 'css', 'json': 'json', 'md': 'markdown'
+                                      };
+                                      const language = languageMap[ext || ''] || 'javascript';
+                                      
+                                      const fullNode = { ...discoveredFile, content, language };
+                                      useStore.getState().addOpenFile(fullNode);
+                                      useStore.getState().setActiveFile(fullNode);
+                                      
+                                      // 3. Apply the patch
+                                      const updated = smartMergeCode(content || '', code);
+                                      if (updated === content) {
+                                        toast.info('No changes needed (already exists)');
+                                      } else {
+                                        useStore.getState().updateFileContent(discoveredFile.id, updated);
+                                        toast.success('Discovered and applied to ' + discoveredFile.name);
+                                      }
+                                    } catch (err) {
+                                      toast.error('Failed to auto-apply: ' + discoveredFile.name);
+                                    }
+                                  } else {
+                                    toast.error('No file open and none detected in message');
+                                  }
                                 }
                               }}
                             />
                           );
                         }
                         return <code className="bg-white/[0.08] px-1 py-0.5 rounded text-emerald-400 text-[10px] font-mono" {...props}>{children}</code>;
+                      },
+                      pre({ children }) {
+                        return <>{children}</>;
                       }
                     }}
                   >
@@ -580,6 +647,16 @@ ${fileContext}`,
                           {text}
                         </button>
                       ))}
+
+                      {agentState?.pendingTool && i === messages.length - 1 && (
+                        <button
+                          onClick={handleExecuteTool}
+                          className="px-4 py-1.5 rounded-lg bg-emerald-500 text-black text-[11px] font-bold uppercase tracking-wide hover:bg-emerald-400 transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] flex items-center gap-2"
+                        >
+                          <Terminal className="w-3.5 h-3.5" />
+                          Run in Terminal: {agentState.pendingTool.name}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
