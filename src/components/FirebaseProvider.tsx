@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User, getRedirectResult } from 'firebase/auth';
-import { auth } from '../firebase';
+import { auth, initFirebaseIfEnabled } from '../firebase';
 import { useStore } from '../store';
 
 interface FirebaseContextType {
@@ -25,54 +25,53 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   useEffect(() => {
-    if (!auth) {
-      console.log('Firebase Auth not available, skipping listener...');
-      setIsAuthReady(true);
-      return;
-    }
-
-    console.log('Setting up Firebase Auth listeners...');
-    
-    // 1. Check for redirect results (immediate)
-    getRedirectResult(auth).then((result) => {
-      if (result?.user) {
-        console.log('Redirect result found:', result.user.email);
-        setLocalUser(result.user);
-        setUser(result.user);
-      }
-    }).catch(err => {
-      console.error('Redirect result error:', err);
-    });
-
-    // 2. Main auth state listener
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      console.log('Auth state changed:', firebaseUser ? `User: ${firebaseUser.email}` : 'No user');
-      
-      // Prevent Firebase from overriding manual Local Mode login
-      const currentUser = useStore.getState().user;
-      if (currentUser?.uid === 'local-desktop-user' && !firebaseUser) {
-        console.log('Blocking Firebase logout override as we are in Local Mode');
-        setIsAuthReady(true);
-        return;
-      }
-
-      setLocalUser(firebaseUser);
-      setUser(firebaseUser);
-      markAuthReady(firebaseUser);
-    }, (error) => {
-      console.error('onAuthStateChanged error:', error);
-      markAuthReady(null); 
-    });
-
-    // Failsafe: If auth hasn't responded in 10 seconds, it's likely a config error
+    let unsubscribe = () => {};
+    let cancelled = false;
     const failsafe = setTimeout(() => {
-      if (!isAuthReadyRef.current) {
-        console.warn('Auth system timed out. Please check your network or Firebase configuration.');
+      if (!isAuthReadyRef.current && !cancelled) {
         setIsAuthReady(true);
       }
     }, 10000);
 
+    (async () => {
+      try {
+        const initialized = await initFirebaseIfEnabled();
+        if (cancelled || !initialized || !auth) {
+          setIsAuthReady(true);
+          return;
+        }
+
+        getRedirectResult(auth).then((result) => {
+          if (result?.user && !cancelled) {
+            setLocalUser(result.user);
+            setUser(result.user);
+          }
+        }).catch(() => {});
+
+        unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+          if (cancelled) return;
+
+          const currentUser = useStore.getState().user;
+          if (currentUser?.uid === 'local-desktop-user' && !firebaseUser) {
+            setIsAuthReady(true);
+            return;
+          }
+
+          setLocalUser(firebaseUser);
+          setUser(firebaseUser);
+          markAuthReady(firebaseUser);
+        }, () => {
+          if (!cancelled) markAuthReady(null);
+        });
+      } finally {
+        if (!cancelled) {
+          setIsAuthReady(true);
+        }
+      }
+    })();
+
     return () => {
+      cancelled = true;
       unsubscribe();
       clearTimeout(failsafe);
     };

@@ -1,15 +1,22 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import MonacoEditor, { OnMount } from '@monaco-editor/react';
+// Ensure Monaco workers are configured before the editor mounts
+import '../monacoSetup';
+import MonacoEditor, { OnMount, loader } from '@monaco-editor/react';
 import { useStore, FileNode } from '../store';
 import { Project } from '../types';
 import { Loader2, Save, Cloud, Zap } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { storageService } from '../lib/storageService';
-import { EditorTabs } from './EditorTabs';
 import { editor } from 'monaco-editor';
 import { LearaLogo } from './LearaLogo';
 import { cn } from '../lib/utils';
+
+loader.config({
+  paths: {
+    vs: '/node_modules/monaco-editor/min/vs'
+  }
+});
 
 export function Editor() {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -159,6 +166,57 @@ export function Editor() {
   };
 
   useEffect(() => {
+    const runAction = async (actionId: string) => {
+      const ed = editorRef.current;
+      if (!ed) return;
+      const action = ed.getAction(actionId);
+      if (action) {
+        await action.run();
+      }
+    };
+
+    const onCommand = (ev: Event) => {
+      const detail = (ev as CustomEvent<string>).detail;
+      const ed = editorRef.current;
+      if (!ed || !detail) return;
+      ed.focus();
+
+      switch (detail) {
+        case 'undo':
+        case 'redo':
+        case 'cut':
+        case 'copy':
+        case 'paste':
+          try {
+            ed.trigger('topbar', detail, null);
+          } catch {
+            if (detail === 'cut') document.execCommand('cut');
+            if (detail === 'copy') document.execCommand('copy');
+            if (detail === 'paste') document.execCommand('paste');
+          }
+          break;
+        case 'find':
+          runAction('actions.find');
+          break;
+        case 'replace':
+          runAction('editor.action.startFindReplaceAction');
+          break;
+        case 'gotoLine':
+          runAction('editor.action.gotoLine');
+          break;
+        case 'quickOutline':
+          runAction('editor.action.quickOutline');
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('leara:editor-command', onCommand as EventListener);
+    return () => window.removeEventListener('leara:editor-command', onCommand as EventListener);
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (activeFile) return;
 
@@ -234,7 +292,6 @@ export function Editor() {
 
   return (
     <div className="h-full w-full flex flex-col bg-[#1e1e1e]">
-      <EditorTabs />
       <div className="flex-1">
         <MonacoEditor
           height="100%"

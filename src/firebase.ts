@@ -1,99 +1,119 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged, signInWithCredential } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { toast } from 'sonner';
 
-// Configuration from environment variables for production/Vercel
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "ai-studio-applet-webapp-24ad3.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || "ai-studio-3a9f682c-2499-40fd-98f5-a8c7f8371f24"
-};
+// For offline-first desktop mode we avoid inlining any Firebase secrets into the renderer bundle.
+// The renderer will call `/api/firebase-config` to learn whether cloud features are enabled.
+let app: any = null;
+let auth: any = null;
+let db: any = null;
+let googleProvider: any = null;
 
-let app: any;
-let auth: any;
-let db: any;
-let googleProvider: any;
-
-const isConfigValid = firebaseConfig.apiKey && firebaseConfig.projectId;
-
-if (isConfigValid) {
+export async function initFirebaseIfEnabled() {
   try {
-    console.log('Firebase: Initializing with Project:', firebaseConfig.projectId);
+    const resp = await fetch('/api/firebase-config');
+    const cfg = await resp.json();
+    if (!cfg || !cfg.enabled || !cfg.apiKey || !cfg.projectId) {
+      if (import.meta.env.DEV) console.debug('Firebase: Runtime config missing');
+      return false;
+    }
+
+    const firebaseConfig = {
+      apiKey: cfg.apiKey,
+      authDomain: cfg.authDomain,
+      projectId: cfg.projectId,
+      storageBucket: cfg.storageBucket,
+      messagingSenderId: cfg.messagingSenderId,
+      appId: cfg.appId,
+      firestoreDatabaseId: cfg.firestoreDatabaseId,
+    };
+
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
     googleProvider = new GoogleAuthProvider();
-    googleProvider.setCustomParameters({
-      prompt: 'select_account'
-    });
+    googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+    if (import.meta.env.DEV) console.debug('Firebase: Initialized');
+    return true;
   } catch (err) {
-    console.error('Firebase: Initialization failed:', err);
+    console.error('Firebase: Initialization failed');
+    return false;
   }
-} else {
-  console.warn('Firebase: Configuration incomplete. Cloud features disabled.');
 }
 
 export { auth, db, googleProvider };
 
 export const signIn = async (useRedirect = false) => {
-  if (!isConfigValid) {
-    const errorMsg = 'Firebase configuration is incomplete. Check your .env file.';
-    console.error('Firebase:', errorMsg);
-    toast.error('Cloud Features Disabled', {
-      description: 'Firebase API Key or Project ID is missing in .env',
-      duration: 5000
-    });
-    return null;
+  if (!auth || !googleProvider) {
+    await initFirebaseIfEnabled();
   }
 
   if (!auth || !googleProvider) {
-    const errorMsg = 'Firebase Auth or Google Provider not initialized.';
-    console.error('Firebase:', errorMsg);
-    toast.error('Auth Error', {
-      description: errorMsg,
-      duration: 5000
-    });
+    if (import.meta.env.DEV) console.debug('Firebase: Auth unavailable, staying in local mode');
     return null;
   }
 
   try {
-    const isElectron = typeof window !== 'undefined' && window.navigator.userAgent.toLowerCase().includes('electron');
+    const isElectron = typeof window !== 'undefined' && 
+      (window.navigator.userAgent.toLowerCase().includes('electron') || 
+       (window as any).require && (window as any).require('electron'));
     
-    if (useRedirect || isElectron) {
-      console.log('Firebase: Attempting signInWithRedirect (Desktop Optimized)...');
+    if (isElectron) {
+      if (import.meta.env.DEV) console.debug('Firebase: Delegating login to Electron main process...');
+      try {
+        const electron = (window as any).electron;
+        if (electron?.ipcRenderer) {
+          electron.ipcRenderer.send('login-with-google');
+        } else {
+          // Fallback if bridge is not available (e.g. running in browser)
+          const { ipcRenderer } = (window as any).require('electron');
+          ipcRenderer.send('login-with-google');
+        }
+        return null;
+      } catch (e) {
+        console.warn('Firebase: ipcRenderer delegation failed, falling back to redirect...', e);
+        return await signInWithRedirect(auth, googleProvider);
+      }
+    }
+
+    if (useRedirect) {
+      if (import.meta.env.DEV) console.debug('Firebase: Attempting signInWithRedirect...');
       return await signInWithRedirect(auth, googleProvider);
     }
 
-    console.log('Firebase: Attempting signInWithPopup...');
+    if (import.meta.env.DEV) console.debug('Firebase: Attempting signInWithPopup...');
     const result = await signInWithPopup(auth, googleProvider);
-    console.log('Firebase: signInWithPopup successful');
     return result;
   } catch (error: any) {
-    console.error('Firebase Sign-In Error:', error.code, error.message);
+    console.error('Firebase Sign-In Error: ', error?.code || '', error?.message || '');
     
-    // Categorize common errors for better UX
     let description = error.message;
     if (error.code === 'auth/popup-blocked-by-user' || error.code === 'auth/cancelled-by-user') {
-      return null; // Silent cancel
+      return null;
     } else if (error.code === 'auth/popup-blocked') {
-      description = 'Login popup was blocked by the app. Trying redirect mode...';
-      toast.info('Switching to Redirect Mode', { description });
+      description = 'Login popup was blocked. Trying redirect mode...';
+      toast.info('Switching Mode', { description });
       return await signInWithRedirect(auth, googleProvider);
     } else if (error.code === 'auth/unauthorized-domain') {
-      const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'unknown';
-      description = `Domain "${currentHost}" is not authorized. Please add it to Authorized Domains in Firebase Console > Authentication > Settings.`;
-      console.error('Firebase: Unauthorized domain detected:', currentHost);
+      description = 'Domain not authorized. Please ensure localhost is added to your Firebase Console.';
     }
 
-    toast.error('Sign In Failed', {
-      description,
-      duration: 6000
-    });
+    toast.error('Sign In Failed', { description, duration: 6000 });
+    throw error;
+  }
+};
+
+export const completeExternalSignIn = async (credentialData: string) => {
+  try {
+    const { idToken, accessToken } = JSON.parse(decodeURIComponent(credentialData));
+    const credential = GoogleAuthProvider.credential(idToken, accessToken);
+    const result = await signInWithCredential(auth, credential);
+    if (import.meta.env.DEV) console.debug('Firebase: Successfully signed in with external credential');
+    return result;
+  } catch (error) {
+    console.error('Firebase: Error completing external sign in:', error);
     throw error;
   }
 };
@@ -147,6 +167,6 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.error('Firestore Error:', errInfo.error);
+  throw new Error(errInfo.error);
 }

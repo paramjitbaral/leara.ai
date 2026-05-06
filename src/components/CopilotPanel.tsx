@@ -429,13 +429,13 @@ ${fileContext}`,
       theme === 'dark' ? "bg-[#1e1e1e] text-[#cccccc]" : "bg-white text-zinc-800"
     )}>
       <div className={cn(
-        "h-9 border-b flex items-center justify-between px-3 shrink-0 transition-colors",
+        "h-10 border-b flex items-center justify-between px-3 shrink-0 transition-colors",
         theme === 'dark' ? "bg-[#1e1e1e] border-white/5" : "bg-zinc-50 border-zinc-200"
       )}>
         <div className="flex items-center gap-2">
           <BrainCircuit className="w-3.5 h-3.5 text-emerald-500" />
           <span className={cn(
-            "text-[10px] font-black uppercase tracking-[0.2em]",
+            "text-[10px] font-semibold uppercase tracking-[0.16em]",
             theme === 'dark' ? "text-white" : "text-zinc-900"
           )}>Leara Core</span>
         </div>

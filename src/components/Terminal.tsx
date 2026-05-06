@@ -194,28 +194,75 @@ function TerminalInstance({ id, type, isActive }: TerminalInstanceProps) {
     fitAddon.fit();
     xtermRef.current = term;
 
-    const resizeObserver = new ResizeObserver(() => {
+    let sendResize: (() => void) | null = null;
+    const doFit = () => {
       if (terminalRef.current && terminalRef.current.offsetWidth > 0) {
         fitAddon.fit();
+        if (sendResize) sendResize();
       }
+    };
+
+    const resizeObserver = new ResizeObserver(() => {
+      doFit();
     });
     resizeObserver.observe(terminalRef.current);
 
     if (type === 'server') {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const folderParam = activeProject?.folderName ? `&folder=${activeProject.folderName}` : '';
-      const ws = new WebSocket(`${protocol}//${window.location.host}/terminal?userId=${userId}${folderParam}`);
+      const host = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? '127.0.0.1:3000'
+        : window.location.host;
+      const ws = new WebSocket(`${protocol}//${host}/terminal?userId=${userId}${folderParam}`);
 
-      ws.onopen = () => {
-        const { cols, rows } = term;
-        ws.send(`__resize__:${JSON.stringify({ cols, rows })}`);
-        term.write('\r\n\x1b[32mConnected to terminal server\x1b[0m\r\n');
-        setIsReady(true);
-        fitAddon.fit();
+      sendResize = () => {
+        if (ws.readyState === WebSocket.OPEN) {
+          const { cols, rows } = term;
+          ws.send(`__resize__:${JSON.stringify({ cols, rows })}`);
+        }
       };
 
-      ws.onmessage = (event) => term.write(event.data);
-      ws.onclose = () => term.write('\r\n\x1b[31mTerminal connection closed\x1b[0m\r\n');
+      ws.onopen = () => {
+        doFit();
+        term.write('\r\n\x1b[32mConnected to terminal server\x1b[0m\r\n');
+        setIsReady(true);
+      };
+
+      ws.onmessage = (event) => {
+        const data = event.data?.toString?.() || String(event.data || '');
+
+        // If the initial terminal tab has a generic name (e.g. 'bash'), try to detect
+        // the real shell from the first incoming data and update the tab label
+        try {
+          const state = useStore.getState();
+          const t = state.terminals.find((tt) => tt.id === id);
+          if (t && (t.name === 'bash' || t.name === 'jsh' || t.name === 'shell')) {
+            if (/Windows PowerShell/i.test(data)) {
+              useStore.setState({ terminals: state.terminals.map(tt => tt.id === id ? { ...tt, name: 'powershell' } : tt) });
+            } else if (/bash-|GNU bash/i.test(data) || /:\~\$/.test(data)) {
+              useStore.setState({ terminals: state.terminals.map(tt => tt.id === id ? { ...tt, name: 'bash' } : tt) });
+            } else if (/zsh/i.test(data)) {
+              useStore.setState({ terminals: state.terminals.map(tt => tt.id === id ? { ...tt, name: 'zsh' } : tt) });
+            }
+          }
+        } catch (e) {
+          // Non-fatal: don't prevent terminal output on detection failure
+        }
+
+        term.write(event.data);
+      };
+      ws.onerror = () => {
+        term.write('\r\n\x1b[31mTerminal server unavailable.\x1b[0m\r\n');
+        setIsReady(false);
+      };
+      ws.onclose = () => {
+        if (!isReady) {
+          term.write('\r\n\x1b[33mTerminal connection failed.\x1b[0m\r\n');
+        } else {
+          term.write('\r\n\x1b[31mTerminal connection closed\x1b[0m\r\n');
+        }
+        setIsReady(false);
+      };
 
       inputHandlerRef.current = (data) => {
         if (ws.readyState === WebSocket.OPEN) ws.send(data);
@@ -224,7 +271,13 @@ function TerminalInstance({ id, type, isActive }: TerminalInstanceProps) {
       const onDataDisposable = term.onData((data) => inputHandlerRef.current?.(data));
 
       cleanupRef.current = () => {
-        ws.close();
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
         onDataDisposable.dispose();
       };
     } else {
@@ -299,7 +352,7 @@ export function Terminal({ onClose }: TerminalProps) {
     )}>
       {/* Header / Tab Bar */}
       <div className={cn(
-        "h-9 border-b flex items-center justify-between shrink-0",
+        "h-10 border-b flex items-center justify-between shrink-0",
         theme === 'dark' ? "bg-[#1e1e1e] border-white/5" : "bg-zinc-50 border-zinc-200"
       )}>
         <div className="flex items-center h-full border-r border-white/5 shrink-0">

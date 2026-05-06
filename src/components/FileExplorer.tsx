@@ -12,7 +12,7 @@ import { storageService } from '../lib/storageService';
 
 export function FileExplorer() {
   const {
-    userId, files, setFiles, addOpenFile, removeOpenFile, setActiveFile, activeFile,
+    user, userId, files, setFiles, addOpenFile, removeOpenFile, setActiveFile, activeFile,
     setCurrentView, activeProject, theme, setEditorHighlightQuery, setSidebarTab, modifiedFiles,
     refreshFiles
   } = useStore();
@@ -32,7 +32,10 @@ export function FileExplorer() {
       const pathParam = activeProject?.folderName ? `&path=${activeProject.folderName}` : '';
       const res = await axios.get(`/api/files?userId=${userId}${pathParam}`);
 
-      // If server returns empty but we have an active project, try to restore
+      const isLocalMode = user?.uid === 'local-desktop-user' || userId === 'local-desktop-user';
+
+      // If server returns empty but we have an active project, try to restore.
+      // In local mode we only restore from IndexedDB/server filesystem, never Firestore.
       if (res.data.length === 0 && activeProject?.id) {
         console.log('Server workspace empty, attempting restore...');
 
@@ -49,8 +52,7 @@ export function FileExplorer() {
           return;
         }
 
-        // 2. Fallback to Firestore (Cloud Backup)
-        if (db) {
+        if (!isLocalMode && db) {
           console.log('Local storage empty, attempting restore from Firestore...');
           const filesRef = collection(db, 'projects', activeProject.id, 'files');
           const snapshot = await getDocs(filesRef);
@@ -376,7 +378,7 @@ export function FileExplorer() {
 
   return (
     <div className="flex flex-col h-full bg-[#1e1e1e] text-[#cccccc] select-none">
-      <div className="h-9 flex items-center justify-between px-3 border-b border-white/5 bg-[#1e1e1e] shrink-0">
+      <div className="h-10 flex items-center justify-between px-3 border-b border-white/5 bg-[#1e1e1e] shrink-0">
         {isSearching ? (
           <div className="flex-1 flex items-center gap-2">
             <Search className="w-3 h-3 text-emerald-500" />

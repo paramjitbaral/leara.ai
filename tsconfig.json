@@ -24,5 +24,5 @@
     "types": ["vite/client"],
     "noEmit": true
   },
-  "exclude": ["workspace"]
+  "exclude": ["workspace", "dist", "dist-server", "dist-electron", "release"]
 }

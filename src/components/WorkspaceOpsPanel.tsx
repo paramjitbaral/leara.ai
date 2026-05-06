@@ -89,7 +89,7 @@ export function WorkspaceOpsPanel() {
 
   return (
     <div className="h-full flex flex-col bg-[#1e1e1e] text-[#cccccc]">
-      <div className="h-9 border-b border-white/5 px-3 flex items-center justify-between">
+      <div className="h-10 border-b border-white/5 px-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <ListChecks className="w-3.5 h-3.5 text-emerald-500" />
           <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Workspace Ops</span>

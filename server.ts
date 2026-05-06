@@ -10,7 +10,8 @@ import { spawn } from "child_process";
 import http from "http";
 import os from "os";
 import OpenAI from "openai";
-import * as pty from "@homebridge/node-pty-prebuilt-multiarch";
+// Lazy-loaded PTY module to avoid crashing when native binaries are missing
+let pty: any = null;
 import { randomUUID } from "crypto";
 import { runAutonomousAgent } from "./backend/agent/controller";
 import { executeToolCall } from "./backend/agent/tools";
@@ -86,6 +87,22 @@ app.use((req, res, next) => {
     console.log(`[API] ${req.method} ${req.url}`);
   }
   next();
+});
+
+// Expose Firebase runtime config to the renderer.
+// Firebase web config is public by design; keep private provider keys only on the server.
+app.get('/api/firebase-config', (req, res) => {
+  const partial = {
+    enabled: Boolean(process.env.FIREBASE_PROJECT_ID),
+    projectId: process.env.FIREBASE_PROJECT_ID || null,
+    apiKey: process.env.FIREBASE_API_KEY || null,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN || null,
+    appId: process.env.FIREBASE_APP_ID || null,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || null,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || null,
+    firestoreDatabaseId: process.env.FIREBASE_DATABASE_ID || null,
+  };
+  res.json(partial);
 });
 
 // --- Terminal Execution Route ---
@@ -1364,7 +1381,7 @@ async function startServer() {
   const server = http.createServer(app);
   const wss = new WebSocketServer({ noServer: true });
 
-  wss.on("connection", (ws, request) => {
+  wss.on("connection", async (ws, request) => {
     const url = new URL(request.url || "", `http://${request.headers.host}`);
     const userId = url.searchParams.get("userId") || "local-user";
     const folder = url.searchParams.get("folder");
@@ -1383,20 +1400,39 @@ async function startServer() {
     const shell = isWindows ? "powershell.exe" : (process.env.SHELL || "bash");
     
     // Create actual PTY session
-    const ptyProcess = pty.spawn(shell, isWindows ? [] : ["-i"], {
-      name: "xterm-256color",
-      cols: 80,
-      rows: 24,
-      cwd: userPath,
-      env: { 
-        ...process.env, 
-        HOME: userRoot,
-        USERPROFILE: userRoot,
-        TERM: "xterm-256color" 
+    let ptyProcess: any;
+    try {
+      if (!pty) {
+        try {
+          pty = await import('@homebridge/node-pty-prebuilt-multiarch');
+        } catch (importErr: any) {
+          console.error('[PTY] dynamic import failed:', importErr && importErr.message ? importErr.message : importErr);
+          try { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: 'pty:error', message: importErr && importErr.message ? importErr.message : String(importErr) })); } catch (e) {}
+          try { ws.close(); } catch (e) {}
+          return;
+        }
       }
-    });
 
-    console.log(`[PTY] Session started: ${shell} in ${userPath}`);
+      ptyProcess = pty.spawn(shell, isWindows ? [] : ["-i"], {
+        name: "xterm-256color",
+        cols: 80,
+        rows: 24,
+        cwd: userPath,
+        env: { 
+          ...process.env, 
+          HOME: userRoot,
+          USERPROFILE: userRoot,
+          TERM: "xterm-256color" 
+        }
+      });
+
+      console.log(`[PTY] Session started: ${shell} in ${userPath}`);
+    } catch (err: any) {
+      console.error('[PTY] spawn failed:', err && err.message ? err.message : err);
+      try { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: 'pty:error', message: err && err.message ? err.message : String(err) })); } catch (e) {}
+      try { ws.close(); } catch (e) {}
+      return; // do not continue with this connection
+    }
 
     ptyProcess.onData(data => {
       if (ws.readyState === WebSocket.OPEN) {
@@ -1447,13 +1483,21 @@ async function startServer() {
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: {
+          server,
+          port: PORT,
+          host: '127.0.0.1',
+          protocol: 'ws',
+        } as any,
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
   }
 
-  server.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, "127.0.0.1", () => {
     console.log(`
 🚀 Leara Desktop Server Running
 🏠 Workspace: ${WORKSPACE_ROOT}
@@ -1461,6 +1505,13 @@ async function startServer() {
 🆔 Mode: ${process.env.NODE_ENV || 'development'}
 Vite Middleware: ACTIVE
     `);
+  }).on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is busy. Please wait or kill the process on this port.`);
+      process.exit(1);
+    } else {
+      console.error('Server error:', err);
+    }
   });
 }
 

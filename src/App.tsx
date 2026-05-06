@@ -1,26 +1,42 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { useStore } from './store';
 import { Editor } from './components/Editor';
 import { FileExplorer } from './components/FileExplorer';
-import { CodeSearch } from './components/CodeSearch';
-import { SourceControlPanel } from './components/SourceControlPanel';
-import { WorkspaceOpsPanel } from './components/WorkspaceOpsPanel';
-import { CopilotPanel } from './components/CopilotPanel';
+import { TabBar } from './components/TabBar';
 import { TopBar } from './components/TopBar';
-import { SettingsModal } from './components/SettingsModal';
-import { HelpModal } from './components/HelpModal';
-import { LearningMode } from './components/LearningMode';
-import { PinSystem } from './components/PinSystem';
 import { Terminal } from './components/Terminal';
-import { Preview } from './components/Preview';
 import { Dashboard } from './components/Dashboard';
-import { signIn } from './firebase';
+import { completeExternalSignIn, signIn, auth, googleProvider } from './firebase';
 import { useFirebase } from './components/FirebaseProvider';
 import { Toaster, toast } from 'sonner';
 import { LearaLogo } from './components/LearaLogo';
-import { Terminal as TerminalIcon, PanelRight, Minimize2, Loader2, Info, Settings, Zap, Sparkles, LogIn, BookOpen, Code, Sun, Moon, GitBranch, ListChecks, Github } from 'lucide-react';
+import { Terminal as TerminalIcon, PanelRight, Minimize2, Loader2, Info, Settings, Zap, Sparkles, Sun, Moon, Code, Github, ListChecks, GitBranch } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+
+// Lazy load components that aren't immediately visible
+const CodeSearch = lazy(() => import('./components/CodeSearch').then(m => ({ default: m.CodeSearch })));
+const SourceControlPanel = lazy(() => import('./components/SourceControlPanel').then(m => ({ default: m.SourceControlPanel })));
+const WorkspaceOpsPanel = lazy(() => import('./components/WorkspaceOpsPanel').then(m => ({ default: m.WorkspaceOpsPanel })));
+const CopilotPanel = lazy(() => import('./components/CopilotPanel').then(m => ({ default: m.CopilotPanel })));
+const SettingsModal = lazy(() => import('./components/SettingsModal').then(m => ({ default: m.SettingsModal })));
+const HelpModal = lazy(() => import('./components/HelpModal').then(m => ({ default: m.HelpModal })));
+const LearningMode = lazy(() => import('./components/LearningMode').then(m => ({ default: m.LearningMode })));
+const PinSystem = lazy(() => import('./components/PinSystem').then(m => ({ default: m.PinSystem })));
+const Preview = lazy(() => import('./components/Preview').then(m => ({ default: m.Preview })));
+
+// Loading fallback for lazy components
+function LazyComponentFallback() {
+  return (
+    <div className="flex items-center justify-center h-full bg-[#1e1e1e]">
+      <div className="flex flex-col items-center gap-2">
+        <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
+        <span className="text-xs text-zinc-400">Loading...</span>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const { 
@@ -54,6 +70,20 @@ export default function App() {
       document.body.classList.remove('light');
     }
   }, [theme]);
+
+  // Warm up heavier panels for faster menu actions
+  useEffect(() => {
+    const warm = () => {
+      import('./components/CodeSearch');
+      import('./components/SourceControlPanel');
+      import('./components/WorkspaceOpsPanel');
+    };
+    if (typeof (window as any).requestIdleCallback === 'function') {
+      (window as any).requestIdleCallback(warm, { timeout: 1200 });
+    } else {
+      setTimeout(warm, 300);
+    }
+  }, []);
   
   const [terminalHeight, setTerminalHeight] = useState(160);
   const [isResizing, setIsResizing] = useState(false);
@@ -66,12 +96,162 @@ export default function App() {
   const [isResizingAI, setIsResizingAI] = useState(false);
   const [rightPanelView, setRightPanelView] = useState<'ai' | 'scm' | 'ops'>('ai');
 
+  useEffect(() => {
+    const onRightPanel = (ev: Event) => {
+      const detail = (ev as CustomEvent<'ai' | 'scm' | 'ops'>).detail;
+      if (!detail) return;
+      if (detail === 'ai' || detail === 'scm' || detail === 'ops') {
+        setRightPanelView(detail);
+        setIsAIPanelOpen(true);
+      }
+    };
+    window.addEventListener('leara:right-panel', onRightPanel as EventListener);
+    return () => window.removeEventListener('leara:right-panel', onRightPanel as EventListener);
+  }, [setIsAIPanelOpen]);
+
   // Smooth Theme Switch Overlay
   useEffect(() => {
     setIsThemeTransitioning(true);
     const timer = setTimeout(() => setIsThemeTransitioning(false), 500);
     return () => clearTimeout(timer);
   }, [theme]);
+
+  // Handle External Auth Callback (Electron side)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const electron = (window as any).electron;
+      
+      if (electron?.ipcRenderer) {
+        const unsubscribe = electron.ipcRenderer.on('auth-callback', async (url: string) => {
+          console.log('App: Received auth-callback:', url);
+          try {
+            const urlObj = new URL(url);
+            const data = urlObj.searchParams.get('data');
+            if (data) {
+              const result = await completeExternalSignIn(data);
+              if (result.user) {
+                setUser(result.user);
+                toast.success('Successfully signed in from browser!');
+              }
+            }
+          } catch (err) {
+            console.error('App: Auth callback error:', err);
+            toast.error('External sign in failed');
+          }
+        });
+        return () => unsubscribe && unsubscribe();
+      } else {
+        // Fallback for legacy environment
+        try {
+          const { ipcRenderer } = (window as any).require('electron');
+          const handleAuth = async (_event: any, url: string) => {
+            // ... same logic ...
+          };
+          ipcRenderer.on('auth-callback', handleAuth);
+          return () => ipcRenderer.removeListener('auth-callback', handleAuth);
+        } catch (e) {}
+      }
+    }
+  }, [setUser]);
+
+  // Check if we are in Auth Bridge mode (Browser side)
+  const [isAuthBridge, setIsAuthBridge] = useState(false);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'auth-bridge') {
+      setIsAuthBridge(true);
+    }
+  }, []);
+
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + P: Quick File Open
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p' && !e.shiftKey) {
+        e.preventDefault();
+        setSidebarTab('explorer');
+        toast.info('Quick open: Type to search files');
+      }
+      // Cmd/Ctrl + Shift + F: Global Search
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'f') {
+        e.preventDefault();
+        setSidebarTab('search');
+        toast.info('Global search: Search across all files');
+      }
+      // Cmd/Ctrl + Shift + P: Command Palette (Settings)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'p') {
+        e.preventDefault();
+        setIsSettingsModalOpen(true);
+      }
+      // Cmd/Ctrl + ,: Settings
+      if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+        e.preventDefault();
+        setIsSettingsModalOpen(true);
+      }
+      // Cmd/Ctrl + S: Save File (prevent default, file save handled in Editor)
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        // Editor component already handles Ctrl+S
+        toast.success('File saved');
+      }
+      // Cmd/Ctrl + `: Toggle Terminal
+      if ((e.ctrlKey || e.metaKey) && e.key === '`') {
+        e.preventDefault();
+        setIsTerminalOpen(!isTerminalOpen);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [setSidebarTab, setIsSettingsModalOpen, isTerminalOpen, setIsTerminalOpen]);
+
+  const handleBridgeLogin = async () => {
+    try {
+      console.log('AuthBridge: Starting popup login...');
+      const statusEl = document.getElementById('auth-status');
+      if (statusEl) statusEl.innerText = 'Opening Google login...';
+
+      if (!auth || !googleProvider) throw new Error('Firebase auth not initialized');
+      const result = await signInWithPopup(auth, googleProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      
+      if (credential) {
+        console.log('AuthBridge: Success, redirecting to app...');
+        if (statusEl) statusEl.innerText = 'Success! Returning to Leara...';
+
+        const data = encodeURIComponent(JSON.stringify({
+          idToken: credential.idToken,
+          accessToken: (credential as any).accessToken
+        }));
+        
+        // Redirect using custom protocol
+        window.location.href = `leara-auth://callback?data=${data}`;
+        
+        // Fallback: If protocol handler fails, show a button
+        setTimeout(() => {
+          if (statusEl) statusEl.innerHTML = `
+            <div class="space-y-4">
+              <p>Login complete! If the app didn't open automatically, click the button below:</p>
+              <a href="leara-auth://callback?data=${data}" class="inline-block px-6 py-3 bg-emerald-600 rounded-lg font-bold">Open Leara</a>
+            </div>
+          `;
+        }, 3000);
+      } else {
+        throw new Error('No credential received from Google.');
+      }
+    } catch (err: any) {
+      console.error('AuthBridge: Login failed:', err);
+      const statusEl = document.getElementById('auth-status');
+      if (statusEl) {
+        statusEl.innerHTML = `
+          <div class="text-red-400">
+            <p>Login failed: ${err.message}</p>
+            <button onclick="window.location.reload()" class="mt-4 px-4 py-2 bg-zinc-800 rounded-lg text-xs font-bold uppercase tracking-widest">Try Again</button>
+          </div>
+        `;
+      }
+    }
+  };
 
   // AI Sidebar Resizing Logic
   useEffect(() => {
@@ -217,15 +397,23 @@ export default function App() {
 
   const handleSignIn = async (useRedirect = false) => {
     if (isSigningIn) return;
+    const isElectron = typeof window !== 'undefined' && 
+      (window.navigator.userAgent.toLowerCase().includes('electron') || 
+       (window as any).require && (window as any).require('electron'));
+    
+    console.log(`App: handleSignIn clicked. useRedirect=${useRedirect}, isElectron=${isElectron}`);
     setIsSigningIn(true);
     try {
       console.log('App: Starting Sign In process (useRedirect:', useRedirect, ')');
       const result = await signIn(useRedirect);
+      
       if (result) {
         console.log('App: Sign In successful', result.user?.email);
         setUser(result.user);
         toast.success('Successfully signed in!');
-      } else if (!useRedirect) {
+      } else if (!useRedirect && !isElectron) {
+        // Only show "cancelled" if we're NOT in Electron. 
+        // In Electron, we expect result to be null because login happens in the external browser.
         console.log('App: Sign In cancelled or failed');
         toast.error('Sign in cancelled', {
           description: 'The login window was closed. Please try again and keep the window open.',
@@ -258,6 +446,35 @@ export default function App() {
     }, 3000);
     return () => clearTimeout(timer);
   }, []);
+
+  if (isAuthBridge) {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-[#0a0a0a] text-white p-8">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.05)_0%,transparent_70%)]" />
+        <LearaLogo size="lg" className="mb-8" />
+        <div className="relative z-10 text-center space-y-6">
+          <h2 className="text-xl font-bold tracking-tight">Connect with Leara</h2>
+          <p id="auth-status" className="text-zinc-400 text-sm max-w-xs mx-auto leading-relaxed">
+            To use your existing session, please click the button below to sign in with Google.
+          </p>
+          <div className="flex justify-center pt-2">
+            <button 
+              onClick={handleBridgeLogin}
+              className="flex items-center gap-3 px-8 py-4 bg-white text-black hover:bg-zinc-100 rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 12-4.53z" />
+              </svg>
+              Sign In with Google
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthReady) {
     return (
@@ -298,7 +515,7 @@ export default function App() {
         </motion.div>
 
         {/* Global Texture */}
-        <div className="absolute inset-0 opacity-[0.02] pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+        <div className="absolute inset-0 opacity-[0.015] pointer-events-none bg-noise" />
       </div>
     );
   }
@@ -411,38 +628,46 @@ export default function App() {
           
           <AnimatePresence>
             {showEnterPin && (
-              <PinSystem 
-                mode={localStorage.getItem('learning_pin') ? "verify" : "create"} 
-                onSuccess={(pin) => {
-                  if (!localStorage.getItem('learning_pin')) {
-                    localStorage.setItem('learning_pin', pin);
-                  }
-                  startLearning();
-                }}
-                onCancel={() => setShowEnterPin(false)}
-              />
+              <Suspense fallback={<LazyComponentFallback />}>
+                <PinSystem 
+                  mode={localStorage.getItem('learning_pin') ? "verify" : "create"} 
+                  onSuccess={(pin) => {
+                    if (!localStorage.getItem('learning_pin')) {
+                      localStorage.setItem('learning_pin', pin);
+                    }
+                    startLearning();
+                  }}
+                  onCancel={() => setShowEnterPin(false)}
+                />
+              </Suspense>
             )}
           </AnimatePresence>
 
           <AnimatePresence>
             {isLearningActive && (
-              <LearningMode 
-                activeFile={activeFile as any} 
-                onClose={stopLearning}
-                onOpenSettings={() => setIsSettingsModalOpen(true)}
-              />
+              <Suspense fallback={<LazyComponentFallback />}>
+                <LearningMode 
+                  activeFile={activeFile as any} 
+                  onClose={stopLearning}
+                  onOpenSettings={() => setIsSettingsModalOpen(true)}
+                />
+              </Suspense>
             )}
           </AnimatePresence>
 
-          <SettingsModal 
-            isOpen={isSettingsModalOpen} 
-            onClose={() => setIsSettingsModalOpen(false)} 
-          />
+          <Suspense fallback={<LazyComponentFallback />}>
+            <SettingsModal 
+              isOpen={isSettingsModalOpen} 
+              onClose={() => setIsSettingsModalOpen(false)} 
+            />
+          </Suspense>
 
-          <HelpModal 
-            isOpen={isHelpModalOpen} 
-            onClose={() => setIsHelpModalOpen(false)} 
-          />
+          <Suspense fallback={<LazyComponentFallback />}>
+            <HelpModal 
+              isOpen={isHelpModalOpen} 
+              onClose={() => setIsHelpModalOpen(false)} 
+            />
+          </Suspense>
           
           <main className="flex-1 flex overflow-hidden relative">
             {/* Main Side + Editor Area */}
@@ -458,7 +683,9 @@ export default function App() {
                   sidebarPosition === 'left' ? "border-r" : "border-l"
                 )}
               >
-                {sidebarTab === 'search' ? <CodeSearch /> : <FileExplorer />}
+                <Suspense fallback={<LazyComponentFallback />}>
+                  {sidebarTab === 'search' ? <CodeSearch /> : <FileExplorer />}
+                </Suspense>
                 
                 {/* Sidebar Resize Handle */}
                 <div 
@@ -475,6 +702,9 @@ export default function App() {
 
               {/* Right Area (Editor & Terminal) */}
               <section className="flex-1 flex flex-col overflow-hidden relative bg-[#1e1e1e]">
+                {/* Tab Bar */}
+                <TabBar />
+                
                 <div className="flex-1 overflow-hidden flex">
                   <div className="flex-1 bg-[#1e1e1e] overflow-hidden">
                     <Editor />
@@ -497,7 +727,9 @@ export default function App() {
                             setIsPreviewResizing(true);
                           }}
                         />
-                        <Preview />
+                        <Suspense fallback={<LazyComponentFallback />}>
+                          <Preview />
+                        </Suspense>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -556,9 +788,11 @@ export default function App() {
                       setIsResizingAI(true);
                     }}
                   />
-                  {rightPanelView === 'ai' && <CopilotPanel />}
-                  {rightPanelView === 'scm' && <SourceControlPanel />}
-                  {rightPanelView === 'ops' && <WorkspaceOpsPanel />}
+                  <Suspense fallback={<LazyComponentFallback />}>
+                    {rightPanelView === 'ai' && <CopilotPanel />}
+                    {rightPanelView === 'scm' && <SourceControlPanel />}
+                    {rightPanelView === 'ops' && <WorkspaceOpsPanel />}
+                  </Suspense>
                 </motion.aside>
               )}
             </AnimatePresence>

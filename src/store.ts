@@ -47,8 +47,10 @@ interface AppState {
   setActiveFile: (file: FileNode | null) => void;
 
   openFiles: FileNode[];
+  openTabs: FileNode[];
   addOpenFile: (file: FileNode) => void;
   removeOpenFile: (fileId: string) => void;
+  closeTab: (fileId: string) => void;
   closeAllFiles: () => void;
   saveFile: (fileId: string, content: string) => Promise<void>;
   saveAllFiles: () => Promise<void>;
@@ -202,13 +204,16 @@ export const useStore = create<AppState>((set) => ({
   }),
 
   openFiles: [],
+  openTabs: [],
   addOpenFile: (file) => set((state) => {
     const isAlreadyOpen = state.openFiles.find((f) => f.id === file.id);
     if (isAlreadyOpen) {
       return { activeFile: isAlreadyOpen };
     }
+    const newOpenFiles = [...state.openFiles, file];
     return {
-      openFiles: [...state.openFiles, file],
+      openFiles: newOpenFiles,
+      openTabs: newOpenFiles,
       activeFile: file,
       originalContents: { ...state.originalContents, [file.id]: file.content || '' }
     };
@@ -223,11 +228,27 @@ export const useStore = create<AppState>((set) => ({
     delete newOriginals[fileId];
     return {
       openFiles: newOpenFiles,
+      openTabs: newOpenFiles,
       activeFile: newActiveFile,
       originalContents: newOriginals
     };
   }),
-  closeAllFiles: () => set({ openFiles: [], activeFile: null, modifiedFiles: new Set(), originalContents: {} }),
+  closeTab: (fileId: string) => set((state) => {
+    const newOpenFiles = state.openFiles.filter((f) => f.id !== fileId);
+    let newActiveFile = state.activeFile;
+    if (state.activeFile?.id === fileId) {
+      newActiveFile = newOpenFiles.length > 0 ? newOpenFiles[newOpenFiles.length - 1] : null;
+    }
+    const newOriginals = { ...state.originalContents };
+    delete newOriginals[fileId];
+    return {
+      openFiles: newOpenFiles,
+      openTabs: newOpenFiles,
+      activeFile: newActiveFile,
+      originalContents: newOriginals
+    };
+  }),
+  closeAllFiles: () => set({ openFiles: [], openTabs: [], activeFile: null, modifiedFiles: new Set(), originalContents: {} }),
 
   modifiedFiles: new Set(),
   originalContents: {},

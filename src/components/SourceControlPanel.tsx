@@ -359,7 +359,7 @@ export function SourceControlPanel() {
   return (
     <div className="h-full flex flex-col bg-[#1e1e1e] text-[#cccccc] font-sans overflow-hidden">
       {/* Header */}
-      <div className="h-9 border-b border-white/5 px-3 flex items-center justify-between shrink-0 bg-[#0a0a0a]">
+      <div className="h-10 border-b border-white/5 px-3 flex items-center justify-between shrink-0 bg-[#0a0a0a]">
         <div className="flex items-center gap-2">
           <Github className="w-4 h-4 text-white" />
           <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-zinc-300">GitHub SCM</span>

@@ -140,15 +140,25 @@ export const Dashboard: React.FC = () => {
       if (user.uid === 'local-desktop-user' || !db) {
         try {
           const res = await axios.get(`/api/files?userId=${user.uid}`);
-          // On the server, /api/files returns the tree. 
-          // For the dashboard, we just want the top-level directories as projects.
-          setProjects(res.data.map((p: any) => ({
-            id: p.name,
-            name: p.name,
-            folderName: p.name,
+          const directories = res.data
+            .filter((p: any) => p.type === 'directory')
+            .map((p: any) => ({
+              id: p.name,
+              name: p.name,
+              folderName: p.name,
+              updatedAt: { toDate: () => new Date() },
+              isStarred: false
+            }));
+
+          const workspaceRoot = {
+            id: 'workspace-root',
+            name: 'Workspace Root',
+            folderName: '',
             updatedAt: { toDate: () => new Date() },
             isStarred: false
-          })));
+          };
+
+          setProjects([workspaceRoot, ...directories]);
           setIsLoading(false);
         } catch (error) {
           console.error('Failed to fetch local projects:', error);
@@ -167,7 +177,39 @@ export const Dashboard: React.FC = () => {
           }));
           setProjects(projectsData);
           setIsLoading(false);
-        }, (error) => {
+        }, async (error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          if ((error as any)?.code === 'permission-denied' || message.includes('Missing or insufficient permissions')) {
+            try {
+              const res = await axios.get(`/api/files?userId=${user.uid}`);
+              const directories = res.data
+                .filter((p: any) => p.type === 'directory')
+                .map((p: any) => ({
+                  id: p.name,
+                  name: p.name,
+                  folderName: p.name,
+                  updatedAt: { toDate: () => new Date() },
+                  isStarred: false
+                }));
+
+              setProjects([
+                {
+                  id: 'workspace-root',
+                  name: 'Workspace Root',
+                  folderName: '',
+                  updatedAt: { toDate: () => new Date() },
+                  isStarred: false
+                },
+                ...directories
+              ]);
+            } catch (localError) {
+              console.error('Failed to fetch local projects after Firestore denied:', localError);
+            } finally {
+              setIsLoading(false);
+            }
+            return;
+          }
+
           handleFirestoreError(error, OperationType.GET, 'projects');
           setIsLoading(false);
         });
