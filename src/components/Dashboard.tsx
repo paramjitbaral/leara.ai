@@ -427,19 +427,43 @@ export const Dashboard: React.FC = () => {
     if (!projectToDelete) return;
     const { id: projectId, folderName } = projectToDelete;
 
+    setIsSubmitting(true);
     try {
       await storageService.deleteProject(userId, projectId, folderName);
 
-      // Remove from local state immediately in case Firestore isn't connected
+      // If the deleted project was active, clear it
+      const currentActive = useStore.getState().activeProject;
+      if (currentActive && (currentActive.id === projectId || currentActive.folderName === folderName)) {
+        setActiveProject(null);
+      }
+
+      // Remove from local state immediately
       setProjects(prev => prev.filter(p => p.id !== projectId));
 
       toast.success('Project deleted');
-      setIsDeleteDialogOpen(false);
-      setProjectToDelete(null);
       fetchStorageStats();
     } catch (error) {
       console.error("Error deleting project:", error);
       toast.error('Failed to delete project');
+    } finally {
+      setIsSubmitting(false);
+      setIsDeleteDialogOpen(false);
+      setProjectToDelete(null);
+    }
+  };
+
+  const resetWorkspace = async () => {
+    if (!window.confirm('Are you sure you want to delete ALL projects and files? This cannot be undone.')) return;
+    setIsSubmitting(true);
+    try {
+      await axios.post('/api/system/reset');
+      toast.success('Workspace reset successfully');
+      window.location.reload();
+    } catch (err) {
+      console.error('Reset failed:', err);
+      toast.error('Failed to reset workspace');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -989,12 +1013,9 @@ export const Dashboard: React.FC = () => {
                           <span className="text-xs text-zinc-500 font-medium">{project.user?.name?.split(' ')[0]}</span>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleStar(project.id, project.isStarred);
-                            }}
+                            onClick={() => toggleStar(project.id, project.isStarred)}
                             className={cn(
                               "p-2 rounded-xl transition-all",
                               project.isStarred ? "text-emerald-500 bg-emerald-500/10" : "text-zinc-600 hover:text-white hover:bg-white/5"
@@ -1003,10 +1024,7 @@ export const Dashboard: React.FC = () => {
                             <Star className={cn("w-4 h-4", project.isStarred && "fill-current")} />
                           </button>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleArchive(project.id, project.status);
-                            }}
+                            onClick={() => toggleArchive(project.id, project.status)}
                             className={cn(
                               "p-2 rounded-xl transition-all",
                               project.status === 'Archived' ? "text-amber-500 bg-amber-500/10" : "text-zinc-600 hover:text-white hover:bg-white/5"
@@ -1016,8 +1034,7 @@ export const Dashboard: React.FC = () => {
                             {project.status === 'Archived' ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
                           </button>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
+                            onClick={() => {
                               setProjectToDelete({ id: project.id, folderName: project.folderName });
                               setIsDeleteDialogOpen(true);
                             }}
@@ -1126,7 +1143,16 @@ export const Dashboard: React.FC = () => {
                               <p className="text-xs text-zinc-500 font-medium">Used: {storageUsed} / Unlimited</p>
                             </div>
                           </div>
-                          <button className="text-xs font-bold text-emerald-500 hover:underline">Clear Cache</button>
+                          <div className="flex items-center gap-4">
+                            <button className="text-xs font-bold text-zinc-500 hover:text-white transition-colors">Clear Cache</button>
+                            <button 
+                              onClick={resetWorkspace}
+                              disabled={isSubmitting}
+                              className="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all"
+                            >
+                              Reset Workspace
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>

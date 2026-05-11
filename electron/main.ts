@@ -83,21 +83,35 @@ async function startLocalAppServer() {
       // Proxy API requests to the backend server
       if (req.url?.startsWith('/api/')) {
         const backendPort = process.env.PORT || 5001;
+        
+        // Prepare headers: remove host to let node set it correctly for the backend
+        const headers = { ...req.headers };
+        delete headers['host'];
+        headers['connection'] = 'keep-alive';
+
         const proxyReq = http.request({
           host: '127.0.0.1',
-          port: backendPort,
+          port: Number(backendPort),
           path: req.url,
           method: req.method,
-          headers: req.headers
+          headers: headers,
+          timeout: 360000 // 6 minutes for long operations like git clone
         }, (proxyRes) => {
           res.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
           proxyRes.pipe(res);
         });
 
         proxyReq.on('error', (err) => {
-          console.error('[Electron] API Proxy Error:', err);
+          console.error(`[Electron] API Proxy Error for ${req.url}:`, err);
           res.writeHead(502);
-          res.end('Bad Gateway');
+          res.end(`Bad Gateway: ${err.message}`);
+        });
+
+        proxyReq.on('timeout', () => {
+          console.error(`[Electron] API Proxy Timeout for ${req.url}`);
+          proxyReq.destroy();
+          res.writeHead(504);
+          res.end('Gateway Timeout');
         });
 
         req.pipe(proxyReq);

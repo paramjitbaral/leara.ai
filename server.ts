@@ -61,7 +61,7 @@ const execAsync = promisify(exec);
 dotenv.config();
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 5001;
 
 interface PendingGitHubAuth {
   projectRoot: string;
@@ -103,6 +103,34 @@ app.get('/api/firebase-config', (req, res) => {
     firestoreDatabaseId: process.env.FIREBASE_DATABASE_ID || null,
   };
   res.json(partial);
+});
+
+// Config for port discovery
+app.get('/api/config', (req, res) => {
+  res.json({ 
+    port: PORT,
+    workspace: WORKSPACE_ROOT,
+    nodeVersion: process.version,
+    platform: process.platform
+  });
+});
+
+// Reset system (Delete all workspace data)
+app.post('/api/system/reset', async (req, res) => {
+  try {
+    const entries = await fs.readdir(WORKSPACE_ROOT);
+    for (const entry of entries) {
+      await fs.remove(path.join(WORKSPACE_ROOT, entry));
+    }
+    // Re-create starter files for local-user
+    const localUserPath = path.join(WORKSPACE_ROOT, 'local-user');
+    await fs.ensureDir(localUserPath);
+    await fs.writeFile(path.join(localUserPath, "welcome.md"), "# Welcome Back!\n\nYour workspace has been reset.");
+    
+    res.json({ success: true, message: "Workspace cleared" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // --- Terminal Execution Route ---
@@ -456,16 +484,26 @@ app.post("/api/github/import", async (req, res) => {
     const { promisify } = await import('util');
     const execAsync = promisify(exec);
 
+    // Verify git is installed
+    try {
+      await execAsync('git --version');
+    } catch (e) {
+      throw new Error("Git is not installed or not in system PATH. Please install Git to import repositories.");
+    }
+
     console.log(`[DESKTOP] Cloning: ${cleanUrl} -> ${targetPath}`);
     await execAsync(`git clone --depth 1 "${cleanUrl}" "${targetPath}"`, {
       env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-      timeout: 60000 
+      timeout: 300000 // 5 minutes for large repos
     });
     
     res.json({ success: true, folder: repoName });
   } catch (err: any) {
     console.error("Github Import Error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ 
+      error: err.message,
+      details: err.stderr || "Git clone failed. Check your internet connection or the repository URL."
+    });
   }
 });
 
@@ -1473,11 +1511,17 @@ async function startServer() {
   });
 
   server.on("upgrade", (request, socket, head) => {
-    const { pathname } = new URL(request.url || "", `http://${request.headers.host}`);
-    if (pathname === "/terminal") {
+    const url = new URL(request.url || "", `http://${request.headers.host || 'localhost'}`);
+    const pathname = url.pathname;
+    
+    console.log(`[SERVER] Upgrade request for: ${pathname}`);
+    
+    if (pathname === "/terminal" || pathname === "/terminal/") {
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit("connection", ws, request);
       });
+    } else {
+      console.warn(`[SERVER] Unhandled upgrade for: ${pathname}`);
     }
   });
 

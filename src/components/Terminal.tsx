@@ -10,6 +10,7 @@ import { useStore, Problem } from '../store';
 import { getWebContainer } from '../services/webcontainer';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import axios from 'axios';
 import '@xterm/xterm/css/xterm.css';
 
 function ProblemsView() {
@@ -101,6 +102,7 @@ function TerminalInstance({ id, type, isActive }: TerminalInstanceProps) {
   } = useStore();
   const [isBooting, setIsBooting] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [serverPort, setServerPort] = useState<number | null>(null);
 
   const inputHandlerRef = useRef<((data: string) => void) | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
@@ -208,78 +210,95 @@ function TerminalInstance({ id, type, isActive }: TerminalInstanceProps) {
     resizeObserver.observe(terminalRef.current);
 
     if (type === 'server') {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const folderParam = activeProject?.folderName ? `&folder=${activeProject.folderName}` : '';
-      const host = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? '127.0.0.1:3000'
-        : window.location.host;
-      const ws = new WebSocket(`${protocol}//${host}/terminal?userId=${userId}${folderParam}`);
-
-      sendResize = () => {
-        if (ws.readyState === WebSocket.OPEN) {
-          const { cols, rows } = term;
-          ws.send(`__resize__:${JSON.stringify({ cols, rows })}`);
-        }
-      };
-
-      ws.onopen = () => {
-        doFit();
-        term.write('\r\n\x1b[32mConnected to terminal server\x1b[0m\r\n');
-        setIsReady(true);
-      };
-
-      ws.onmessage = (event) => {
-        const data = event.data?.toString?.() || String(event.data || '');
-
-        // If the initial terminal tab has a generic name (e.g. 'bash'), try to detect
-        // the real shell from the first incoming data and update the tab label
-        try {
-          const state = useStore.getState();
-          const t = state.terminals.find((tt) => tt.id === id);
-          if (t && (t.name === 'bash' || t.name === 'jsh' || t.name === 'shell')) {
-            if (/Windows PowerShell/i.test(data)) {
-              useStore.setState({ terminals: state.terminals.map(tt => tt.id === id ? { ...tt, name: 'powershell' } : tt) });
-            } else if (/bash-|GNU bash/i.test(data) || /:\~\$/.test(data)) {
-              useStore.setState({ terminals: state.terminals.map(tt => tt.id === id ? { ...tt, name: 'bash' } : tt) });
-            } else if (/zsh/i.test(data)) {
-              useStore.setState({ terminals: state.terminals.map(tt => tt.id === id ? { ...tt, name: 'zsh' } : tt) });
-            }
+      const connectTerminal = async () => {
+        let port = serverPort;
+        if (!port) {
+          try {
+            const res = await axios.get('/api/config');
+            port = res.data.port;
+            setServerPort(port);
+          } catch (e) {
+            port = 5001;
           }
-        } catch (e) {
-          // Non-fatal: don't prevent terminal output on detection failure
         }
 
-        term.write(event.data);
-      };
-      ws.onerror = () => {
-        term.write('\r\n\x1b[31mTerminal server unavailable.\x1b[0m\r\n');
-        setIsReady(false);
-      };
-      ws.onclose = () => {
-        if (!isReady) {
-          term.write('\r\n\x1b[33mTerminal connection failed.\x1b[0m\r\n');
-        } else {
-          term.write('\r\n\x1b[31mTerminal connection closed\x1b[0m\r\n');
-        }
-        setIsReady(false);
-      };
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const folderParam = activeProject?.folderName ? `&folder=${activeProject.folderName}` : '';
+        
+        // Use the same hostname as the renderer to avoid CORS/CSP issues
+        const currentHostname = window.location.hostname;
+        const targetHost = (currentHostname === 'localhost' || currentHostname === '127.0.0.1')
+          ? `${currentHostname}:${port}`
+          : window.location.host || `127.0.0.1:${port}`;
+        
+        const wsUrl = `${protocol}//${targetHost}/terminal?userId=${userId}${folderParam}`;
+        console.log(`[TERMINAL] Connecting to: ${wsUrl}`);
+        const ws = new WebSocket(wsUrl);
 
-      inputHandlerRef.current = (data) => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(data);
-      };
+        sendResize = () => {
+          if (ws.readyState === WebSocket.OPEN) {
+            const { cols, rows } = term;
+            ws.send(`__resize__:${JSON.stringify({ cols, rows })}`);
+          }
+        };
 
-      const onDataDisposable = term.onData((data) => inputHandlerRef.current?.(data));
+        ws.onopen = () => {
+          doFit();
+          term.write('\r\n\x1b[32mConnected to terminal server\x1b[0m\r\n');
+          setIsReady(true);
+        };
 
-      cleanupRef.current = () => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close();
-        }
-        ws.onopen = null;
-        ws.onmessage = null;
-        ws.onclose = null;
-        ws.onerror = null;
-        onDataDisposable.dispose();
+        ws.onmessage = (event) => {
+          const data = event.data?.toString?.() || String(event.data || '');
+          try {
+            const state = useStore.getState();
+            const t = state.terminals.find((tt) => tt.id === id);
+            if (t && (t.name === 'bash' || t.name === 'jsh' || t.name === 'shell')) {
+              if (/Windows PowerShell/i.test(data)) {
+                useStore.setState({ terminals: state.terminals.map(tt => tt.id === id ? { ...tt, name: 'powershell' } : tt) });
+              } else if (/bash-|GNU bash/i.test(data) || /:\~\$/.test(data)) {
+                useStore.setState({ terminals: state.terminals.map(tt => tt.id === id ? { ...tt, name: 'bash' } : tt) });
+              } else if (/zsh/i.test(data)) {
+                useStore.setState({ terminals: state.terminals.map(tt => tt.id === id ? { ...tt, name: 'zsh' } : tt) });
+              }
+            }
+          } catch (e) { }
+          term.write(event.data);
+        };
+
+        ws.onerror = () => {
+          term.write('\r\n\x1b[31mTerminal server unavailable.\x1b[0m\r\n');
+          setIsReady(false);
+        };
+
+        ws.onclose = () => {
+          if (!isReady) {
+            term.write('\r\n\x1b[33mTerminal connection failed.\x1b[0m\r\n');
+          } else {
+            term.write('\r\n\x1b[31mTerminal connection closed\x1b[0m\r\n');
+          }
+          setIsReady(false);
+        };
+
+        inputHandlerRef.current = (data) => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(data);
+        };
+
+        const onDataDisposable = term.onData((data) => inputHandlerRef.current?.(data));
+
+        cleanupRef.current = () => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.close();
+          }
+          ws.onopen = null;
+          ws.onmessage = null;
+          ws.onclose = null;
+          ws.onerror = null;
+          onDataDisposable.dispose();
+        };
       };
+      
+      connectTerminal();
     } else {
       setIsBooting(true);
       term.write('\r\n\x1b[31mBooting WebContainer...\x1b[0m\r\n');
