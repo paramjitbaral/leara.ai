@@ -177,11 +177,12 @@ async function createWindow() {
   // 1. Start Backend Server (Only in production, in dev we use npm run dev)
   if (!isDev) {
     const port = process.env.PORT || 5001;
-    const serverPath = path.join(process.resourcesPath, 'app.asar.unpacked/server.js');
+    const serverPath = path.join(process.resourcesPath, 'server/server.mjs');
 
     console.log(`[Electron] Starting production server at ${serverPath}`);
     
     serverProcess = fork(serverPath, [], {
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       env: { 
         ...process.env, 
         NODE_ENV: 'production',
@@ -191,8 +192,20 @@ async function createWindow() {
       }
     });
 
+    serverProcess.stdout?.on('data', (data) => {
+      console.log(`[Backend] ${data}`);
+    });
+
+    serverProcess.stderr?.on('data', (data) => {
+      console.error(`[Backend ERROR] ${data}`);
+    });
+
     serverProcess.on('error', (err) => {
       console.error('[Electron] Server failed to start:', err);
+    });
+
+    serverProcess.on('exit', (code) => {
+      console.log(`[Electron] Backend server exited with code ${code}`);
     });
   }
 

@@ -1565,9 +1565,17 @@ export const Dashboard: React.FC = () => {
                 </Dialog.Close>
                 <button
                   onClick={deleteProject}
-                  className="flex-1 py-3 bg-red-500 hover:bg-red-400 text-white font-semibold text-sm rounded-xl transition-all active:scale-[0.98]"
+                  disabled={isSubmitting}
+                  className={cn(
+                    "flex-1 py-3 bg-red-500 hover:bg-red-400 text-white font-semibold text-sm rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  )}
                 >
-                  Delete
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : 'Delete'}
                 </button>
               </div>
             </div>
