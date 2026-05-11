@@ -211,27 +211,13 @@ function TerminalInstance({ id, type, isActive }: TerminalInstanceProps) {
 
     if (type === 'server') {
       const connectTerminal = async () => {
-        let port = serverPort;
-        if (!port) {
-          try {
-            const res = await axios.get('/api/config');
-            port = res.data.port;
-            setServerPort(port);
-          } catch (e) {
-            port = 5001;
-          }
-        }
-
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const folderParam = activeProject?.folderName ? `&folder=${activeProject.folderName}` : '';
         
-        // Use the same hostname as the renderer to avoid CORS/CSP issues
-        const currentHostname = window.location.hostname;
-        const targetHost = (currentHostname === 'localhost' || currentHostname === '127.0.0.1')
-          ? `${currentHostname}:${port}`
-          : window.location.host || `127.0.0.1:${port}`;
-        
-        const wsUrl = `${protocol}//${targetHost}/terminal?userId=${userId}${folderParam}`;
+        // Always connect through the same host that serves the page.
+        // In dev, this is 127.0.0.1:3000 (the Vite+Express server).
+        // In production, this is the Electron local app server which proxies WS upgrades to the backend.
+        const wsUrl = `${protocol}//${window.location.host}/terminal?userId=${userId}${folderParam}`;
         console.log(`[TERMINAL] Connecting to: ${wsUrl}`);
         const ws = new WebSocket(wsUrl);
 

@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs-extra";
 import { simpleGit } from "simple-git";
@@ -73,11 +72,14 @@ interface PendingGitHubAuth {
 
 const pendingGitHubAuth = new Map<string, PendingGitHubAuth>();
 
-// Desktop-focused workspace: always use local directory
-const WORKSPACE_ROOT = path.join(process.cwd(), "workspace");
+// Desktop-focused workspace: use Electron's userData in production, local dir in dev
+const WORKSPACE_ROOT = process.env.LEARA_USER_DATA 
+  ? path.join(process.env.LEARA_USER_DATA, "workspace")
+  : path.join(process.cwd(), "workspace");
 
 // Ensure workspace exists
 fs.ensureDirSync(WORKSPACE_ROOT);
+console.log(`[SERVER] Workspace root: ${WORKSPACE_ROOT}`);
 
 app.use(express.json());
 
@@ -1442,16 +1444,43 @@ async function startServer() {
     try {
       if (!pty) {
         try {
-          pty = await import('@homebridge/node-pty-prebuilt-multiarch');
-        } catch (importErr: any) {
-          console.error('[PTY] dynamic import failed:', importErr && importErr.message ? importErr.message : importErr);
-          try { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: 'pty:error', message: importErr && importErr.message ? importErr.message : String(importErr) })); } catch (e) {}
-          try { ws.close(); } catch (e) {}
-          return;
+          // Use require() instead of import() because import() uses ESM resolution
+          // which ignores NODE_PATH. require() respects NODE_PATH.
+          pty = require('@homebridge/node-pty-prebuilt-multiarch');
+        } catch (e1: any) {
+          console.warn('[PTY] Standard require failed, trying unpacked path...', e1.message);
+          try {
+            // In production Electron, native modules are in app.asar.unpacked
+            const resourcesPath = process.env.RESOURCES_PATH;
+            if (resourcesPath) {
+              // Try the main package first, then the direct JS file
+              const unpackedPkgPath = path.join(resourcesPath, 'app.asar.unpacked', 'node_modules', '@homebridge', 'node-pty-prebuilt-multiarch');
+              const unpackedFilePath = path.join(unpackedPkgPath, 'lib', 'index.js');
+              
+              if (fs.existsSync(unpackedFilePath)) {
+                pty = require(unpackedFilePath);
+                console.log('[PTY] Loaded from direct file path successfully');
+              } else if (fs.existsSync(unpackedPkgPath)) {
+                pty = require(unpackedPkgPath);
+                console.log('[PTY] Loaded from unpacked package path successfully');
+              } else {
+                throw new Error(`PTY paths not found: ${unpackedFilePath}`);
+              }
+            } else {
+              throw e1;
+            }
+          } catch (e2: any) {
+            console.error('[PTY] All load attempts failed:', e2.message);
+            try { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: 'pty:error', message: e2.message })); } catch (e) {}
+            try { ws.close(); } catch (e) {}
+            return;
+          }
         }
       }
 
-      ptyProcess = pty.spawn(shell, isWindows ? [] : ["-i"], {
+      // Handle both ESM default export and CJS module.exports patterns
+      const ptyMod = pty.default || pty;
+      ptyProcess = ptyMod.spawn(shell, isWindows ? [] : ["-i"], {
         name: "xterm-256color",
         cols: 80,
         rows: 24,
@@ -1526,6 +1555,7 @@ async function startServer() {
   });
 
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: {
         middlewareMode: true,

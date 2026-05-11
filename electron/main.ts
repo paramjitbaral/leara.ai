@@ -12,6 +12,7 @@ import { fork, ChildProcess } from 'child_process';
 import { dirname } from 'path';
 import http from 'http';
 import fs from 'fs';
+import net from 'net';
 
 let mainWindow: BrowserWindow | null = null;
 let serverProcess: ChildProcess | null = null;
@@ -72,49 +73,59 @@ if (!gotTheLock) {
   });
 }
 
+function getBackendPort(): number {
+  return Number(process.env.PORT) || 5001;
+}
+
+function proxyRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+  const backendPort = getBackendPort();
+  const headers = { ...req.headers };
+  delete headers['host'];
+  headers['connection'] = 'keep-alive';
+
+  const proxyReq = http.request({
+    host: '127.0.0.1',
+    port: backendPort,
+    path: req.url,
+    method: req.method,
+    headers: headers,
+    timeout: 360000 // 6 minutes for long operations like git clone
+  }, (proxyRes) => {
+    res.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
+    proxyRes.pipe(res);
+  });
+
+  proxyReq.on('error', (err) => {
+    console.error(`[Electron] API Proxy Error for ${req.url}:`, err.message);
+    if (!res.headersSent) {
+      res.writeHead(502);
+      res.end(`Bad Gateway: ${err.message}`);
+    }
+  });
+
+  proxyReq.on('timeout', () => {
+    console.error(`[Electron] API Proxy Timeout for ${req.url}`);
+    proxyReq.destroy();
+    if (!res.headersSent) {
+      res.writeHead(504);
+      res.end('Gateway Timeout');
+    }
+  });
+
+  req.pipe(proxyReq);
+}
+
 async function startLocalAppServer() {
   const isDev = !app.isPackaged;
   if (isDev) return 'http://127.0.0.1:3000';
 
   if (localAppServerUrl) return localAppServerUrl;
 
-  return new Promise<string>((resolve) => {
+  return new Promise<string>((resolve, reject) => {
     localAppServer = http.createServer((req, res) => {
       // Proxy API requests to the backend server
       if (req.url?.startsWith('/api/')) {
-        const backendPort = process.env.PORT || 5001;
-        
-        // Prepare headers: remove host to let node set it correctly for the backend
-        const headers = { ...req.headers };
-        delete headers['host'];
-        headers['connection'] = 'keep-alive';
-
-        const proxyReq = http.request({
-          host: '127.0.0.1',
-          port: Number(backendPort),
-          path: req.url,
-          method: req.method,
-          headers: headers,
-          timeout: 360000 // 6 minutes for long operations like git clone
-        }, (proxyRes) => {
-          res.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
-          proxyRes.pipe(res);
-        });
-
-        proxyReq.on('error', (err) => {
-          console.error(`[Electron] API Proxy Error for ${req.url}:`, err);
-          res.writeHead(502);
-          res.end(`Bad Gateway: ${err.message}`);
-        });
-
-        proxyReq.on('timeout', () => {
-          console.error(`[Electron] API Proxy Timeout for ${req.url}`);
-          proxyReq.destroy();
-          res.writeHead(504);
-          res.end('Gateway Timeout');
-        });
-
-        req.pipe(proxyReq);
+        proxyRequest(req, res);
         return;
       }
 
@@ -134,17 +145,75 @@ async function startLocalAppServer() {
         '.png': 'image/png',
         '.jpg': 'image/jpg',
         '.svg': 'image/svg+xml',
+        '.woff': 'font/woff',
+        '.woff2': 'font/woff2',
+        '.ico': 'image/x-icon',
       };
 
-      res.writeHead(200, { 'Content-Type': contentTypes[ext] || 'text/plain' });
-      res.end(fs.readFileSync(filePath));
+      try {
+        res.writeHead(200, { 'Content-Type': contentTypes[ext] || 'application/octet-stream' });
+        res.end(fs.readFileSync(filePath));
+      } catch (e) {
+        res.writeHead(404);
+        res.end('Not found');
+      }
     });
 
-    localAppServer.listen(0, 'localhost', () => {
-      const address = localAppServer!.address() as any;
-      localAppServerUrl = `http://localhost:${address.port}`;
-      resolve(localAppServerUrl);
+    // Proxy WebSocket upgrades (for terminal) to backend
+    localAppServer.on('upgrade', (req, socket, head) => {
+      const backendPort = getBackendPort();
+      console.log(`[Electron] WS Upgrade request: ${req.url} -> 127.0.0.1:${backendPort}`);
+      
+      const proxySocket = net.connect(backendPort, '127.0.0.1', () => {
+        // Reconstruct the HTTP upgrade request to send to backend
+        const reqHeaders = Object.entries(req.headers)
+          .filter(([key]) => key.toLowerCase() !== 'host')
+          .map(([key, value]) => `${key}: ${value}`)
+          .join('\r\n');
+        
+        proxySocket.write(
+          `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n` +
+          `Host: 127.0.0.1:${backendPort}\r\n` +
+          `${reqHeaders}\r\n` +
+          `\r\n`
+        );
+        if (head && head.length > 0) proxySocket.write(head);
+
+        proxySocket.pipe(socket);
+        socket.pipe(proxySocket);
+      });
+
+      proxySocket.on('error', (err) => {
+        console.error('[Electron] WS proxy error:', err.message);
+        socket.destroy();
+      });
+
+      socket.on('error', (err) => {
+        console.error('[Electron] WS socket error:', err.message);
+        proxySocket.destroy();
+      });
     });
+
+    let port = 5005;
+    const tryListen = () => {
+      localAppServer!.listen(port, '127.0.0.1', () => {
+        localAppServerUrl = `http://127.0.0.1:${port}`;
+        console.log(`[Electron] UI Server started on ${localAppServerUrl}`);
+        resolve(localAppServerUrl);
+      });
+    };
+
+    localAppServer!.on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        console.warn(`[Electron] Port ${port} busy, trying ${port + 1}...`);
+        port++;
+        tryListen();
+      } else {
+        reject(err);
+      }
+    });
+
+    tryListen();
   });
 }
 
@@ -176,10 +245,24 @@ async function createWindow() {
   
   // 1. Start Backend Server (Only in production, in dev we use npm run dev)
   if (!isDev) {
-    const port = process.env.PORT || 5001;
-    const serverPath = path.join(process.resourcesPath, 'server/server.mjs');
+    const port = getBackendPort();
+    const serverPath = path.join(process.resourcesPath, 'server', 'server.cjs');
+    // Use Electron's userData directory for the workspace so it persists across updates
+    const userDataPath = app.getPath('userData');
 
+    // The app's node_modules are inside the asar archive.
+    // Native modules (like node-pty) are in app.asar.unpacked.
+    // We must set NODE_PATH so the forked server can find both.
+    const appPath = app.getAppPath(); // e.g. .../resources/app.asar
+    const nodeModulesPath = path.join(appPath, 'node_modules');
+    const unpackedModulesPath = path.join(appPath + '.unpacked', 'node_modules');
+    const combinedNodePath = `${unpackedModulesPath}${path.delimiter}${nodeModulesPath}`;
+    
     console.log(`[Electron] Starting production server at ${serverPath}`);
+    console.log(`[Electron] User data path: ${userDataPath}`);
+    console.log(`[Electron] Backend port: ${port}`);
+    console.log(`[Electron] App path: ${appPath}`);
+    console.log(`[Electron] NODE_PATH: ${combinedNodePath}`);
     
     serverProcess = fork(serverPath, [], {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
@@ -188,16 +271,18 @@ async function createWindow() {
         NODE_ENV: 'production',
         PORT: port.toString(),
         ELECTRON_RUN_AS_NODE: '1',
-        RESOURCES_PATH: process.resourcesPath
+        RESOURCES_PATH: process.resourcesPath,
+        LEARA_USER_DATA: userDataPath,
+        NODE_PATH: combinedNodePath
       }
     });
 
-    serverProcess.stdout?.on('data', (data) => {
-      console.log(`[Backend] ${data}`);
+    serverProcess.stdout?.on('data', (data: Buffer) => {
+      console.log(`[Backend] ${data.toString().trim()}`);
     });
 
-    serverProcess.stderr?.on('data', (data) => {
-      console.error(`[Backend ERROR] ${data}`);
+    serverProcess.stderr?.on('data', (data: Buffer) => {
+      console.error(`[Backend ERROR] ${data.toString().trim()}`);
     });
 
     serverProcess.on('error', (err) => {
@@ -207,6 +292,15 @@ async function createWindow() {
     serverProcess.on('exit', (code) => {
       console.log(`[Electron] Backend server exited with code ${code}`);
     });
+
+    // Wait for the backend to become available before loading the page
+    console.log(`[Electron] Waiting for backend on port ${port}...`);
+    const backendReady = await waitForUrl(`http://127.0.0.1:${port}/api/config`, 60, 500);
+    if (backendReady) {
+      console.log('[Electron] Backend is ready!');
+    } else {
+      console.error('[Electron] Backend failed to start in time!');
+    }
   }
 
   // 2. Load Content

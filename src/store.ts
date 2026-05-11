@@ -172,6 +172,9 @@ interface AppState {
   setProblems: (problems: Problem[]) => void;
   bottomPanelTab: 'terminal' | 'problems';
   setBottomPanelTab: (tab: 'terminal' | 'problems') => void;
+
+  // Cache management
+  updateFileInTree: (fileId: string, content: string) => void;
 }
 
 const getInitialTheme = (): 'dark' | 'light' => {
@@ -498,6 +501,17 @@ export const useStore = create<AppState>()(
   setProblems: (problems) => set({ problems }),
   bottomPanelTab: 'terminal',
   setBottomPanelTab: (tab) => set({ bottomPanelTab: tab }),
+
+  updateFileInTree: (fileId, content) => set((state) => {
+    const updateNodes = (nodes: FileNode[]): FileNode[] => {
+      return nodes.map(node => {
+        if (node.id === fileId) return { ...node, content };
+        if (node.children) return { ...node, children: updateNodes(node.children) };
+        return node;
+      });
+    };
+    return { files: updateNodes(state.files) };
+  }),
 }), {
   name: 'leara-storage',
   storage: createJSONStorage(() => localStorage),

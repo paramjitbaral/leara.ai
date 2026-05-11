@@ -167,33 +167,64 @@ export function FileExplorer() {
     }
   };
 
+  const syncAllFileContents = useCallback(async (nodes: FileNode[]) => {
+    const walk = async (items: FileNode[]) => {
+      for (const item of items) {
+        if (item.type === 'file' && !item.content) {
+          try {
+            const res = await axios.get(`/api/files/content?userId=${userId}&path=${item.id}`);
+            useStore.getState().updateFileInTree(item.id, res.data.content);
+          } catch (e) {}
+        }
+        if (item.children) await walk(item.children);
+      }
+    };
+    await walk(nodes);
+  }, [userId]);
+
+  useEffect(() => {
+    if (files.length > 0) {
+      syncAllFileContents(files);
+    }
+  }, [files.length, syncAllFileContents]);
+
   const openFile = async (node: FileNode) => {
+    // 1. Check if we already have it in the tree (cache)
+    const findInTree = (nodes: FileNode[]): FileNode | null => {
+      for (const n of nodes) {
+        if (n.id === node.id) return n;
+        if (n.children) {
+          const found = findInTree(n.children);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    const cachedNode = findInTree(files);
+    const content = cachedNode?.content;
+
+    const ext = node.name.split('.').pop()?.toLowerCase();
+    const languageMap: Record<string, string> = {
+      'js': 'javascript', 'jsx': 'javascript', 'ts': 'typescript', 'tsx': 'typescript',
+      'py': 'python', 'html': 'html', 'css': 'css', 'json': 'json', 'md': 'markdown',
+      'cpp': 'cpp', 'c': 'c', 'java': 'java', 'go': 'go', 'rs': 'rust', 'php': 'php',
+      'rb': 'ruby', 'sql': 'sql',
+    };
+    const language = languageMap[ext || ''] || 'javascript';
+
+    if (content !== undefined) {
+      addOpenFile({ ...node, content, language });
+      return;
+    }
+
     try {
       const res = await axios.get(`/api/files/content?userId=${userId}&path=${node.id}`);
-      const ext = node.name.split('.').pop()?.toLowerCase();
-      const languageMap: Record<string, string> = {
-        'js': 'javascript',
-        'jsx': 'javascript',
-        'ts': 'typescript',
-        'tsx': 'typescript',
-        'py': 'python',
-        'html': 'html',
-        'css': 'css',
-        'json': 'json',
-        'md': 'markdown',
-        'cpp': 'cpp',
-        'c': 'c',
-        'java': 'java',
-        'go': 'go',
-        'rs': 'rust',
-        'php': 'php',
-        'rb': 'ruby',
-        'sql': 'sql',
-      };
-      const language = languageMap[ext || ''] || 'javascript';
       addOpenFile({ ...node, content: res.data.content, language });
+      useStore.getState().updateFileInTree(node.id, res.data.content);
     } catch (err) {
       console.error('Failed to open file:', err);
+      toast.error('Failed to load file content');
     }
   };
 

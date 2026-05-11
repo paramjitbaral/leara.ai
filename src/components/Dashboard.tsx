@@ -970,52 +970,56 @@ export const Dashboard: React.FC = () => {
                     filteredProjects.map((project) => (
                       <motion.div
                         key={project.id}
-                        role="button"
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         whileHover={{ x: 4 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => handleProjectClick(project)}
                         className={cn(
-                          "group border rounded-xl p-3 flex items-center gap-4 cursor-pointer transition-all active:scale-[0.98]",
+                          "group border rounded-xl flex items-center transition-all overflow-hidden",
                           theme === 'dark' ? "bg-[#0f0f0f] border-white/5 hover:border-emerald-500/30" : "bg-white border-zinc-100 hover:border-emerald-500/30 hover:shadow-md"
                         )}
                       >
-                        <div className={cn(
-                          "w-12 h-12 rounded-xl flex items-center justify-center border transition-all",
-                          theme === 'dark' ? "bg-zinc-900 border-white/5" : "bg-zinc-50 border-zinc-100"
-                        )}>
-                          <Code2 className="w-6 h-6 text-zinc-500 group-hover:text-emerald-500 transition-colors" />
-                        </div>
+                        {/* Clickable Content Area */}
+                        <div 
+                          className="flex-1 flex items-center gap-4 p-3 cursor-pointer active:scale-[0.99] transition-transform"
+                          onClick={() => handleProjectClick(project)}
+                        >
+                          <div className={cn(
+                            "w-12 h-12 rounded-xl flex items-center justify-center border transition-all",
+                            theme === 'dark' ? "bg-zinc-900 border-white/5" : "bg-zinc-50 border-zinc-100"
+                          )}>
+                            <Code2 className="w-6 h-6 text-zinc-500 group-hover:text-emerald-500 transition-colors" />
+                          </div>
 
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3">
-                            <h4 className={cn(
-                              "font-bold transition-colors",
-                              theme === 'dark' ? "text-white group-hover:text-emerald-400" : "text-zinc-900 group-hover:text-emerald-600"
-                            )}>{project.name}</h4>
-                            <span className="px-2 py-0.5 bg-zinc-800 text-zinc-500 text-[9px] font-bold rounded uppercase tracking-wider">
-                              {project.template}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-3">
+                              <h4 className={cn(
+                                "font-bold transition-colors",
+                                theme === 'dark' ? "text-white group-hover:text-emerald-400" : "text-zinc-900 group-hover:text-emerald-600"
+                              )}>{project.name}</h4>
+                              <span className="px-2 py-0.5 bg-zinc-800 text-zinc-500 text-[9px] font-bold rounded uppercase tracking-wider">
+                                {project.template}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-500 mt-1 truncate max-w-xl font-medium">{project.description}</p>
+                          </div>
+
+                          <div className="hidden md:flex flex-col items-end gap-1 px-6 border-l border-zinc-100 dark:border-white/5">
+                            <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Last Modified</span>
+                            <span className="text-xs text-zinc-400 font-medium">
+                              {project.updatedAt?.toDate ? project.updatedAt.toDate().toLocaleDateString() : 'Just now'}
                             </span>
                           </div>
-                          <p className="text-xs text-zinc-500 mt-1 truncate max-w-xl font-medium">{project.description}</p>
+
+                          <div className="hidden lg:flex items-center gap-3 px-6 border-l border-zinc-100 dark:border-white/5">
+                            <img src={project.user?.avatar} alt={project.user?.name} className="w-6 h-6 rounded-full grayscale group-hover:grayscale-0 transition-all" referrerPolicy="no-referrer" />
+                            <span className="text-xs text-zinc-500 font-medium">{project.user?.name?.split(' ')[0]}</span>
+                          </div>
                         </div>
 
-                        <div className="hidden md:flex flex-col items-end gap-1 px-6 border-l border-zinc-100 dark:border-white/5">
-                          <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Last Modified</span>
-                          <span className="text-xs text-zinc-400 font-medium">
-                            {project.updatedAt?.toDate ? project.updatedAt.toDate().toLocaleDateString() : 'Just now'}
-                          </span>
-                        </div>
-
-                        <div className="hidden lg:flex items-center gap-3 px-6 border-l border-zinc-100 dark:border-white/5">
-                          <img src={project.user?.avatar} alt={project.user?.name} className="w-6 h-6 rounded-full grayscale group-hover:grayscale-0 transition-all" referrerPolicy="no-referrer" />
-                          <span className="text-xs text-zinc-500 font-medium">{project.user?.name?.split(' ')[0]}</span>
-                        </div>
-
-                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        {/* Separate Actions Area */}
+                        <div className="flex items-center gap-2 px-4 py-3 border-l border-white/5 bg-white/[0.01]">
                           <button
-                            onClick={() => toggleStar(project.id, project.isStarred)}
+                            onClick={(e) => { e.stopPropagation(); toggleStar(project.id, project.isStarred); }}
                             className={cn(
                               "p-2 rounded-xl transition-all",
                               project.isStarred ? "text-emerald-500 bg-emerald-500/10" : "text-zinc-600 hover:text-white hover:bg-white/5"
@@ -1024,7 +1028,7 @@ export const Dashboard: React.FC = () => {
                             <Star className={cn("w-4 h-4", project.isStarred && "fill-current")} />
                           </button>
                           <button
-                            onClick={() => toggleArchive(project.id, project.status)}
+                            onClick={(e) => { e.stopPropagation(); toggleArchive(project.id, project.status); }}
                             className={cn(
                               "p-2 rounded-xl transition-all",
                               project.status === 'Archived' ? "text-amber-500 bg-amber-500/10" : "text-zinc-600 hover:text-white hover:bg-white/5"
@@ -1034,14 +1038,20 @@ export const Dashboard: React.FC = () => {
                             {project.status === 'Archived' ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
                           </button>
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setProjectToDelete({ id: project.id, folderName: project.folderName });
                               setIsDeleteDialogOpen(true);
                             }}
-                            className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-500/5 rounded-xl transition-all"
+                            className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-500/5 rounded-xl transition-all flex items-center justify-center min-w-[36px] min-h-[36px]"
                             title="Delete project"
+                            disabled={isSubmitting && projectToDelete?.id === project.id}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            {isSubmitting && projectToDelete?.id === project.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
                           </button>
                         </div>
                       </motion.div>

@@ -6,7 +6,7 @@
   "main": "dist-electron/main.cjs",
   "scripts": {
     "dev": "nodemon --delay 2.5 --watch server.ts --watch backend/ --watch src/ --ignore workspace/ --exec tsx server.ts",
-    "build": "vite build && tsup server.ts --format esm --outDir dist-server --clean --external @homebridge/node-pty-prebuilt-multiarch && tsup electron/main.ts electron/preload.ts --format cjs --outDir dist-electron --clean --external electron",
+    "build": "vite build && tsup --config tsup.server.config.ts && tsup electron/main.ts electron/preload.ts --format cjs --outDir dist-electron --clean --external electron",
     "preview": "vite preview",
     "clean": "rm -rf dist dist-electron dist-server",
     "lint": "tsc --noEmit",
@@ -28,15 +28,18 @@
     ],
     "extraResources": [
       {
-        "from": "dist-server/server.js",
-        "to": "server/server.mjs"
+        "from": "dist-server/server.cjs",
+        "to": "server/server.cjs"
       }
     ],
+    "icon": "build/icon.png",
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.png"
     },
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "icon": "build/icon.png"
     }
   },
   "dependencies": {
