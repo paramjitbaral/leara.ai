@@ -35,6 +35,16 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     (async () => {
       try {
+        // Try to load cached user first to avoid flicker
+        const cachedUserStr = localStorage.getItem('leara-cached-user');
+        if (cachedUserStr) {
+          try {
+            const cachedUser = JSON.parse(cachedUserStr);
+            setUser(cachedUser);
+            setLocalUser(cachedUser);
+          } catch (e) {}
+        }
+
         const initialized = await initFirebaseIfEnabled();
         if (cancelled || !initialized || !auth) {
           setIsAuthReady(true);
@@ -48,25 +58,37 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           }
         }).catch(() => {});
 
+        // We wait for the FIRST onAuthStateChanged call before marking auth as ready
+        let firstCall = true;
         unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
           if (cancelled) return;
 
           const currentUser = useStore.getState().user;
           if (currentUser?.uid === 'local-desktop-user' && !firebaseUser) {
-            setIsAuthReady(true);
+            if (firstCall) {
+              markAuthReady(null);
+              firstCall = false;
+            }
             return;
           }
 
           setLocalUser(firebaseUser);
           setUser(firebaseUser);
-          markAuthReady(firebaseUser);
-        }, () => {
-          if (!cancelled) markAuthReady(null);
+          
+          if (firstCall) {
+            markAuthReady(firebaseUser);
+            firstCall = false;
+          }
+        }, (err) => {
+          console.error('FirebaseProvider: Auth error', err);
+          if (!cancelled && firstCall) {
+            markAuthReady(null);
+            firstCall = false;
+          }
         });
-      } finally {
-        if (!cancelled) {
-          setIsAuthReady(true);
-        }
+      } catch (err) {
+        console.error('FirebaseProvider: Init error', err);
+        if (!cancelled) setIsAuthReady(true);
       }
     })();
 

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { User } from 'firebase/auth';
 import { storageService } from './lib/storageService';
 import { toast } from 'sonner';
@@ -181,9 +182,26 @@ const getInitialTheme = (): 'dark' | 'light' => {
   return 'light'; // Default to light
 };
 
-export const useStore = create<AppState>((set) => ({
-  user: null,
-  setUser: (user) => set({ user, userId: user?.uid || 'default-user' }),
+export const useStore = create<AppState>()(
+  persist(
+    (set) => ({
+      user: null,
+      setUser: (user) => {
+        if (user) {
+          // Persist a subset of user info for immediate loading
+          const simplifiedUser = {
+            uid: user.uid,
+            displayName: user.displayName,
+            email: user.email,
+            photoURL: user.photoURL,
+          };
+          localStorage.setItem('leara-cached-user', JSON.stringify(simplifiedUser));
+          set({ user, userId: user.uid });
+        } else {
+          localStorage.removeItem('leara-cached-user');
+          set({ user: null, userId: 'default-user' });
+        }
+      },
 
   userId: 'default-user',
   setUserId: (id) => set({ userId: id }),
@@ -480,4 +498,24 @@ export const useStore = create<AppState>((set) => ({
   setProblems: (problems) => set({ problems }),
   bottomPanelTab: 'terminal',
   setBottomPanelTab: (tab) => set({ bottomPanelTab: tab }),
+}), {
+  name: 'leara-storage',
+  storage: createJSONStorage(() => localStorage),
+  partialize: (state) => ({
+    theme: state.theme,
+    sidebarWidth: state.sidebarWidth,
+    sidebarPosition: state.sidebarPosition,
+    currentView: state.currentView,
+    activeProject: state.activeProject,
+    openFiles: state.openFiles,
+    activeFile: state.activeFile,
+    aiProvider: state.aiProvider,
+    aiModel: state.aiModel,
+    aiEndpoint: state.aiEndpoint,
+    terminalType: state.terminalType,
+    sidebarTab: state.sidebarTab,
+    chatHistories: state.chatHistories,
+    aiPresets: state.aiPresets,
+    activePresetId: state.activePresetId,
+  }),
 }));

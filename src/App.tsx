@@ -137,8 +137,7 @@ export default function App() {
             }
           } catch (err) {
             console.error('App: Auth callback error:', err);
-            toast.dismiss('google-login-pending');
-            toast.error('External sign in failed');
+            toast.error('External sign in failed', { id: 'google-login-pending' });
           }
         });
         return () => unsubscribe && unsubscribe();
@@ -155,6 +154,12 @@ export default function App() {
       }
     }
   }, [setUser]);
+  // Auto-dismiss the login toast when user is set
+  useEffect(() => {
+    if (user) {
+      toast.dismiss('google-login-pending');
+    }
+  }, [user]);
 
   // Check if we are in Auth Bridge mode (Browser side)
   const [isAuthBridge, setIsAuthBridge] = useState(false);

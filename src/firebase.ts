@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged, signInWithCredential } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged, signInWithCredential, setPersistence, indexedDBLocalPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { toast } from 'sonner';
 
@@ -60,11 +60,15 @@ export async function initFirebaseIfEnabled() {
 
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
+    
+    // Explicitly set persistence to indexedDB for better Electron support
+    await setPersistence(auth, indexedDBLocalPersistence);
+
     db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
     googleProvider = new GoogleAuthProvider();
     googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-    if (import.meta.env.DEV) console.debug('Firebase: Initialized');
+    if (import.meta.env.DEV) console.debug('Firebase: Initialized with IndexedDB persistence');
     return true;
   } catch (err) {
     console.error('Firebase: Initialization failed', err);
@@ -139,8 +143,15 @@ export const signIn = async (useRedirect = false) => {
       description = 'Domain not authorized. Please ensure localhost is added to your Firebase Console.';
     }
 
-    toast.error('Sign In Failed', { description, duration: 6000 });
+    toast.error('Sign In Failed', { 
+      id: 'google-login-pending', // This replaces the loading toast
+      description, 
+      duration: 6000 
+    });
     throw error;
+  } finally {
+    // Failsafe to ensure the loading toast is gone
+    setTimeout(() => toast.dismiss('google-login-pending'), 5000);
   }
 };
 

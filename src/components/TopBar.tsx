@@ -512,11 +512,16 @@ export function TopBar({ onEnterLearnMode }: TopBarProps) {
                         <Settings className="w-4 h-4" /> Settings
                       </DropdownMenu.Item>
                       <DropdownMenu.Item
-                        onClick={() => {
-                          logOut();
-                          if (user?.uid === 'local-desktop-user') {
+                        onClick={async () => {
+                          try {
+                            await logOut();
                             useStore.getState().setUser(null);
+                            // Clear all persisted state on logout for security and clean slate
+                            localStorage.removeItem('leara-storage');
                             window.location.reload();
+                          } catch (err) {
+                            console.error('Logout failed:', err);
+                            toast.error('Logout failed');
                           }
                         }}
                         className="flex items-center gap-3 px-3 py-2.5 text-[10px] font-bold text-red-500 hover:bg-red-500/10 rounded-xl cursor-pointer outline-none transition-all uppercase tracking-widest active:scale-95"
