@@ -498,8 +498,43 @@ app.post("/api/github/import", async (req, res) => {
       env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
       timeout: 300000 // 5 minutes for large repos
     });
+
+    // Walk the repo and collect all files with content for immediate frontend sync
+    const getAllFiles = async (dir: string): Promise<any[]> => {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      const files: any[] = [];
+      for (const entry of entries) {
+        if (['.git', 'node_modules', 'dist', 'build', '.next', '__pycache__'].includes(entry.name)) continue;
+        const fullPath = path.join(dir, entry.name);
+        const relPath = path.relative(targetPath, fullPath).replace(/\\/g, '/');
+        
+        if (entry.isDirectory()) {
+          files.push({ id: relPath, name: entry.name, type: 'directory' });
+          files.push(...(await getAllFiles(fullPath)));
+        } else {
+          try {
+            // Only read text files to keep payload reasonable
+            if (/\.(js|jsx|ts|tsx|py|html|css|json|md|txt|env|c|cpp|h|java|go|rs|rb|php|sql|sh)$/i.test(entry.name)) {
+              const content = await fs.readFile(fullPath, 'utf-8');
+              files.push({ id: relPath, name: entry.name, type: 'file', content });
+            } else {
+              files.push({ id: relPath, name: entry.name, type: 'file' });
+            }
+          } catch (e) {
+            files.push({ id: relPath, name: entry.name, type: 'file' });
+          }
+        }
+      }
+      return files;
+    };
+
+    const allFiles = await getAllFiles(targetPath);
     
-    res.json({ success: true, folder: repoName });
+    res.json({ 
+      success: true, 
+      folder: repoName,
+      fileTree: allFiles 
+    });
   } catch (err: any) {
     console.error("Github Import Error:", err);
     res.status(500).json({ 

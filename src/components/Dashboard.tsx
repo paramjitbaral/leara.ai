@@ -325,24 +325,35 @@ export const Dashboard: React.FC = () => {
     setIsSubmitting(true);
     setImportProgress(0);
 
-    // Simulate progress
-    const progressInterval = setInterval(() => {
-      setImportProgress(prev => {
-        if (prev >= 95) return prev;
-        return prev + Math.floor(Math.random() * 10);
-      });
-    }, 400);
+    // Initial simulated progress for connection
+    setImportProgress(10);
 
     try {
+      // 1. Trigger Server Import (Clone + Read Content)
       const res = await axios.post('/api/github/import', {
         userId,
         repoUrl: githubUrl
       });
 
+      setImportProgress(60); // Server clone and read complete
+
       const repoName = res.data.folder;
       const fileTree = res.data.fileTree;
 
       let newProject: any = null;
+
+      // 2. Local Storage Sync (Instant Cache)
+      if (fileTree && fileTree.length > 0) {
+        toast.info('Indexing files for offline use...', { icon: <Zap className="w-4 h-4 text-emerald-500" /> });
+        
+        // Split fileTree into chunks for smoother progress
+        const chunkSize = 20;
+        for (let i = 0; i < fileTree.length; i += chunkSize) {
+          const chunk = fileTree.slice(i, i + chunkSize);
+          await storageService.batchBackup(repoName, chunk); // Using repoName as ID for local sync
+          setImportProgress(prev => Math.min(95, prev + (30 * (chunkSize / fileTree.length))));
+        }
+      }
 
       // 3. Add to Firestore (Optional Cloud registration)
       if (user.uid !== 'local-desktop-user' && db) {
@@ -378,9 +389,8 @@ export const Dashboard: React.FC = () => {
             }
           };
 
-          // Backup all imported files to Firestore
+          // Backup all imported files to Firestore (Cloud sync)
           if (fileTree) {
-            toast.info('Indexing files...', { duration: 5000 });
             await backupFilesToFirestore(projectId, fileTree);
           }
         } catch (err) {
@@ -418,7 +428,6 @@ export const Dashboard: React.FC = () => {
         description: errorDetails ? `${errorMessage}: ${errorDetails}` : errorMessage,
       });
     } finally {
-      clearInterval(progressInterval);
       setIsSubmitting(false);
     }
   };
