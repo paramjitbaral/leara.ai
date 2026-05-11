@@ -11,14 +11,43 @@ let db: any = null;
 let googleProvider: any = null;
 
 export async function initFirebaseIfEnabled() {
+  if (app) return true;
+
+  const getBuildTimeConfig = () => {
+    // These are defined in vite.config.ts
+    const config = {
+      apiKey: process.env.FIREBASE_API_KEY,
+      authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+      appId: process.env.FIREBASE_APP_ID,
+      firestoreDatabaseId: process.env.FIREBASE_DATABASE_ID,
+    } as any;
+    if (config.apiKey && config.projectId) return { ...config, enabled: true };
+    return null;
+  };
+
+  let cfg: any = null;
   try {
     const resp = await fetch('/api/firebase-config');
-    const cfg = await resp.json();
-    if (!cfg || !cfg.enabled || !cfg.apiKey || !cfg.projectId) {
-      if (import.meta.env.DEV) console.debug('Firebase: Runtime config missing');
-      return false;
+    if (resp.ok) {
+      cfg = await resp.json();
     }
+  } catch (err) {
+    if (import.meta.env.DEV) console.debug('Firebase: Config fetch failed, trying fallback...');
+  }
 
+  if (!cfg || !cfg.enabled || !cfg.apiKey || !cfg.projectId) {
+    cfg = getBuildTimeConfig();
+  }
+
+  if (!cfg || !cfg.enabled || !cfg.apiKey || !cfg.projectId) {
+    if (import.meta.env.DEV) console.debug('Firebase: No valid configuration found');
+    return false;
+  }
+
+  try {
     const firebaseConfig = {
       apiKey: cfg.apiKey,
       authDomain: cfg.authDomain,
@@ -38,7 +67,7 @@ export async function initFirebaseIfEnabled() {
     if (import.meta.env.DEV) console.debug('Firebase: Initialized');
     return true;
   } catch (err) {
-    console.error('Firebase: Initialization failed');
+    console.error('Firebase: Initialization failed', err);
     return false;
   }
 }
@@ -52,15 +81,21 @@ export const signIn = async (useRedirect = false) => {
 
   if (!auth || !googleProvider) {
     if (import.meta.env.DEV) console.debug('Firebase: Auth unavailable, staying in local mode');
-    return null;
+    throw new Error('Authentication service is currently unavailable. Please check your connection and try again.');
   }
 
   try {
     const isElectron = typeof window !== 'undefined' && 
       (window.navigator.userAgent.toLowerCase().includes('electron') || 
-       (window as any).require && (window as any).require('electron'));
+       (window as any).electron?.ipcRenderer ||
+       ((window as any).require && (window as any).require('electron')));
     
     if (isElectron) {
+      toast.loading('Opening Google Login...', { 
+        id: 'google-login-pending',
+        description: 'Please complete the sign-in in your external browser.',
+        duration: 10000 
+      });
       if (import.meta.env.DEV) console.debug('Firebase: Delegating login to Electron main process...');
       try {
         const electron = (window as any).electron;
@@ -74,6 +109,10 @@ export const signIn = async (useRedirect = false) => {
         return null;
       } catch (e) {
         console.warn('Firebase: ipcRenderer delegation failed, falling back to redirect...', e);
+        toast.info('Opening in Browser', { 
+          id: 'google-login-pending',
+          description: 'Starting authentication in your external browser...' 
+        });
         return await signInWithRedirect(auth, googleProvider);
       }
     }

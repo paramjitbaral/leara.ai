@@ -80,6 +80,30 @@ async function startLocalAppServer() {
 
   return new Promise<string>((resolve) => {
     localAppServer = http.createServer((req, res) => {
+      // Proxy API requests to the backend server
+      if (req.url?.startsWith('/api/')) {
+        const backendPort = process.env.PORT || 5001;
+        const proxyReq = http.request({
+          host: '127.0.0.1',
+          port: backendPort,
+          path: req.url,
+          method: req.method,
+          headers: req.headers
+        }, (proxyRes) => {
+          res.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
+          proxyRes.pipe(res);
+        });
+
+        proxyReq.on('error', (err) => {
+          console.error('[Electron] API Proxy Error:', err);
+          res.writeHead(502);
+          res.end('Bad Gateway');
+        });
+
+        req.pipe(proxyReq);
+        return;
+      }
+
       let filePath = path.join(__dirname, '../dist', req.url === '/' ? 'index.html' : req.url!);
       
       // Handle SPA routing
@@ -164,6 +188,14 @@ async function createWindow() {
   }
   mainWindow.loadURL(startUrl);
   if (isDev) mainWindow.webContents.openDevTools();
+  
+  // Handle protocol deep links on Windows/Linux for the first instance
+  const deepLinkUrl = process.argv.find(arg => arg.startsWith(`${PROTOCOL}://`));
+  if (deepLinkUrl) {
+    mainWindow.webContents.once('did-finish-load', () => {
+      mainWindow?.webContents.send('auth-callback', deepLinkUrl);
+    });
+  }
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.maximize();
@@ -206,15 +238,21 @@ ipcMain.on('window-new', () => {
 // Google Login IPC - Open External Browser
 ipcMain.on('login-with-google', async () => {
   console.log('[Electron] Received login-with-google IPC');
-  // We need to know the startUrl. In dev it's 5173. In prod it's the local server port.
-  // Since we might not have it yet if window hasn't opened, let's use a reliable way.
-  let authUrl = 'http://127.0.0.1:3000/?view=auth-bridge';
   
-  if (app.isPackaged && localAppServer) {
-    const address = localAppServer.address() as any;
-    authUrl = `http://127.0.0.1:${address.port}/?view=auth-bridge`;
+  let baseUrl = 'http://127.0.0.1:3000';
+  if (mainWindow) {
+    try {
+      const currentUrl = new URL(mainWindow.webContents.getURL());
+      baseUrl = `${currentUrl.protocol}//${currentUrl.host}`;
+    } catch (e) {
+      if (app.isPackaged && localAppServer) {
+        const address = localAppServer.address() as any;
+        baseUrl = `http://127.0.0.1:${address.port}`;
+      }
+    }
   }
   
+  const authUrl = `${baseUrl}/?view=auth-bridge`;
   console.log('[Electron] Opening external browser for auth:', authUrl);
   shell.openExternal(authUrl);
 });

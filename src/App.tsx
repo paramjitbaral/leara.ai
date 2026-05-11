@@ -6,7 +6,7 @@ import { TabBar } from './components/TabBar';
 import { TopBar } from './components/TopBar';
 import { Terminal } from './components/Terminal';
 import { Dashboard } from './components/Dashboard';
-import { completeExternalSignIn, signIn, auth, googleProvider } from './firebase';
+import { completeExternalSignIn, signIn, auth, googleProvider, initFirebaseIfEnabled } from './firebase';
 import { useFirebase } from './components/FirebaseProvider';
 import { Toaster, toast } from 'sonner';
 import { LearaLogo } from './components/LearaLogo';
@@ -130,12 +130,14 @@ export default function App() {
             if (data) {
               const result = await completeExternalSignIn(data);
               if (result.user) {
+                toast.dismiss('google-login-pending');
                 setUser(result.user);
                 toast.success('Successfully signed in from browser!');
               }
             }
           } catch (err) {
             console.error('App: Auth callback error:', err);
+            toast.dismiss('google-login-pending');
             toast.error('External sign in failed');
           }
         });
@@ -211,7 +213,11 @@ export default function App() {
       const statusEl = document.getElementById('auth-status');
       if (statusEl) statusEl.innerText = 'Opening Google login...';
 
-      if (!auth || !googleProvider) throw new Error('Firebase auth not initialized');
+      if (!auth || !googleProvider) {
+        if (statusEl) statusEl.innerText = 'Initializing authentication...';
+        await initFirebaseIfEnabled();
+      }
+      if (!auth || !googleProvider) throw new Error('Authentication service unavailable. Please ensure your backend is running.');
       const result = await signInWithPopup(auth, googleProvider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       
@@ -399,7 +405,8 @@ export default function App() {
     if (isSigningIn) return;
     const isElectron = typeof window !== 'undefined' && 
       (window.navigator.userAgent.toLowerCase().includes('electron') || 
-       (window as any).require && (window as any).require('electron'));
+       (window as any).electron?.ipcRenderer ||
+       ((window as any).require && (window as any).require('electron')));
     
     console.log(`App: handleSignIn clicked. useRedirect=${useRedirect}, isElectron=${isElectron}`);
     setIsSigningIn(true);

@@ -76,6 +76,7 @@
     transform: translateY(1px);
   }
 
+
   body.light {
     @apply bg-white text-zinc-900;
   }

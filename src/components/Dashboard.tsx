@@ -112,6 +112,7 @@ export const Dashboard: React.FC = () => {
   const [projectSubFilter, setProjectSubFilter] = useState<'all' | 'archived'>('all');
   const [storageUsed, setStorageUsed] = useState('Calculating...');
   const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'appearance' | 'editor' | 'ai' | 'account'>('general');
+  const [preSearchTab, setPreSearchTab] = useState<'home' | 'dashboard' | 'projects' | 'favorites' | 'settings' | null>(null);
 
   const handleProjectClick = (project: any) => {
     setActiveProject(project);
@@ -224,6 +225,19 @@ export const Dashboard: React.FC = () => {
     fetchProjects();
     fetchStorageStats();
   }, [user]);
+
+  useEffect(() => {
+    const hasSearch = searchQuery.trim().length > 0;
+    const tabShowsList = activeTab === 'dashboard' || activeTab === 'projects' || activeTab === 'favorites';
+    if (hasSearch && !tabShowsList) {
+      if (!preSearchTab) setPreSearchTab(activeTab);
+      setActiveTab('projects');
+    }
+    if (!hasSearch && preSearchTab) {
+      setActiveTab(preSearchTab);
+      setPreSearchTab(null);
+    }
+  }, [searchQuery, activeTab, preSearchTab]);
 
   const backupFilesToFirestore = async (projectId: string, files: any[]) => {
     try {
@@ -468,8 +482,11 @@ export const Dashboard: React.FC = () => {
 
   const filteredProjects = projects
     .filter(p => {
-      const matchesSearch = p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      const firstWord = searchQuery.trim().split(/\s+/)[0] || '';
+      const needle = firstWord.toLowerCase();
+      const name = (p.name || '').toLowerCase();
+      const desc = (p.description || '').toLowerCase();
+      const matchesSearch = !needle || name.startsWith(needle) || desc.startsWith(needle);
 
       const isArchived = p.status === 'Archived';
 
@@ -492,7 +509,7 @@ export const Dashboard: React.FC = () => {
     )}>
       {/* Sidebar - Minimalist & Sleek */}
       <aside className={cn(
-        "w-20 lg:w-52 border-r flex flex-col shrink-0 transition-all duration-300 h-full overflow-hidden",
+        "w-24 lg:w-60 border-r flex flex-col shrink-0 transition-all duration-300 h-full overflow-hidden",
         theme === 'dark' ? "bg-[#0a0a0a] border-white/5" : "bg-white border-zinc-100"
       )}>
         {/* Header - Fixed */}
@@ -629,13 +646,13 @@ export const Dashboard: React.FC = () => {
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className={cn(
-          "h-16 border-b flex items-center justify-between px-8 z-10 shrink-0",
-          theme === 'dark' ? "bg-[#080808] border-white/5" : "bg-white border-zinc-100 shadow-sm"
+          "h-14 flex items-center justify-between px-8 z-10 shrink-0",
+          theme === 'dark' ? "bg-[#0b0b0b]" : "bg-white"
         )}>
           <div className="flex items-center gap-4">
             <div className={cn(
-              "p-2 rounded-lg transition-colors",
-              theme === 'dark' ? "bg-white/5 text-zinc-400 group-hover:text-emerald-500" : "bg-zinc-50 text-zinc-500 border border-zinc-200/50"
+              "p-2 rounded-md transition-colors",
+              theme === 'dark' ? "text-zinc-300" : "text-zinc-600"
             )}>
               {activeTab === 'home' && <LayoutDashboard className="w-4 h-4" />}
               {activeTab === 'dashboard' && <Cpu className="w-4 h-4" />}
@@ -645,7 +662,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="flex flex-col">
               <h1 className={cn(
-                "text-[15px] font-bold tracking-tight leading-none mb-1",
+                "text-[14px] font-semibold tracking-tight leading-none mb-0.5",
                 theme === 'dark' ? "text-white" : "text-zinc-900"
               )}>
                 {activeTab === 'home' && 'Workspace Home'}
@@ -655,8 +672,8 @@ export const Dashboard: React.FC = () => {
                 {activeTab === 'settings' && 'System Preferences'}
               </h1>
               <p className={cn(
-                "text-[11px] font-medium opacity-80",
-                theme === 'dark' ? "text-zinc-500" : "text-zinc-400"
+                "text-[11px] font-normal opacity-70",
+                theme === 'dark' ? "text-zinc-500" : "text-zinc-500"
               )}>
                 {activeTab === 'home' && 'Central Control'}
                 {activeTab === 'dashboard' && 'Manage your local playgrounds'}
@@ -669,8 +686,8 @@ export const Dashboard: React.FC = () => {
 
           <div className="flex items-center gap-3">
             <div className={cn(
-              "flex items-center rounded-lg px-4 py-2 transition-all w-48 md:w-64",
-              theme === 'dark' ? "bg-white/5" : "bg-zinc-100"
+              "flex items-center rounded-md px-3.5 py-1.5 transition-all w-52 md:w-64 border",
+              theme === 'dark' ? "bg-[#0f0f0f] border-white/10" : "bg-white border-zinc-200/70"
             )}>
               <Search className="w-3.5 h-3.5 text-zinc-500" />
               <input 
@@ -678,31 +695,25 @@ export const Dashboard: React.FC = () => {
                 placeholder="Find a playground..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-transparent border-none outline-none text-[11px] ml-2 w-full placeholder:text-zinc-500 dark:text-white text-zinc-900"
+                className={cn(
+                  "bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-[11px] ml-2 w-full placeholder:text-zinc-500",
+                  theme === 'dark' ? "text-white" : "text-zinc-900"
+                )}
+                style={{
+                  color: theme === 'dark' ? '#ffffff' : '#111827',
+                  caretColor: theme === 'dark' ? '#ffffff' : '#111827',
+                  WebkitTextFillColor: theme === 'dark' ? '#ffffff' : '#111827'
+                }}
               />
             </div>
-
-            <div className={cn("w-px h-4 mx-1", theme === 'dark' ? "bg-white/10" : "bg-zinc-200")} />
-
-            <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className={cn(
-                "p-2 rounded-lg transition-all",
-                theme === 'dark' 
-                  ? "hover:bg-white/5 text-zinc-400 hover:text-white" 
-                  : "hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900"
-              )}
-            >
-              {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-            </button>
 
             <button
               onClick={() => setIsCreateDialogOpen(true)}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-[11px] font-bold",
-                theme === 'dark' 
-                  ? "bg-white text-black hover:bg-zinc-200" 
-                  : "bg-zinc-900 text-white hover:bg-zinc-800"
+                "flex items-center gap-2 px-3.5 py-1.5 rounded-md transition-all text-[11px] font-semibold border",
+                theme === 'dark'
+                  ? "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                  : "border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
               )}
             >
               <Plus className="w-3.5 h-3.5" />
