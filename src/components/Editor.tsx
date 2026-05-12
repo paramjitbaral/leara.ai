@@ -12,11 +12,10 @@ import { editor } from 'monaco-editor';
 import { LearaLogo } from './LearaLogo';
 import { cn } from '../lib/utils';
 
-loader.config({
-  paths: {
-    vs: '/node_modules/monaco-editor/min/vs'
-  }
-});
+import * as monaco from 'monaco-editor';
+
+// Use local monaco-editor instead of loading from CDN for offline support
+loader.config({ monaco });
 
 export function Editor() {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -298,6 +297,12 @@ export function Editor() {
           language={activeFile.language || 'javascript'}
           theme={theme === 'dark' ? 'vs-dark' : 'light'}
           value={activeFile.content}
+          loading={
+            <div className="flex flex-col items-center justify-center h-full gap-3">
+              <Loader2 className="w-6 h-6 animate-spin text-emerald-500/50" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Initializing Editor</span>
+            </div>
+          }
           onMount={handleEditorDidMount}
           onChange={handleEditorChange}
           options={{

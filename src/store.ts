@@ -510,7 +510,21 @@ export const useStore = create<AppState>()(
         return node;
       });
     };
-    return { files: updateNodes(state.files) };
+
+    const newFiles = updateNodes(state.files);
+    
+    // Also update openFiles and activeFile so the editor refreshes automatically
+    const newOpenFiles = state.openFiles.map(f => f.id === fileId ? { ...f, content } : f);
+    const newActiveFile = state.activeFile?.id === fileId 
+      ? { ...state.activeFile, content } 
+      : state.activeFile;
+
+    return { 
+      files: newFiles,
+      openFiles: newOpenFiles,
+      activeFile: newActiveFile,
+      originalContents: { ...state.originalContents, [fileId]: content }
+    };
   }),
 }), {
   name: 'leara-storage',

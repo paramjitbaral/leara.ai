@@ -1606,22 +1606,26 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
-  server.listen(PORT, "127.0.0.1", () => {
-    console.log(`
+  const start = (p: number) => {
+    server.listen(p, "127.0.0.1", () => {
+      console.log(`
 🚀 Leara Desktop Server Running
 🏠 Workspace: ${WORKSPACE_ROOT}
-🔗 URL: http://localhost:${PORT}
+🔗 URL: http://localhost:${p}
 🆔 Mode: ${process.env.NODE_ENV || 'development'}
 Vite Middleware: ACTIVE
-    `);
-  }).on('error', (err: any) => {
-    if (err.code === 'EADDRINUSE') {
-      console.error(`Port ${PORT} is busy. Please wait or kill the process on this port.`);
-      process.exit(1);
-    } else {
-      console.error('Server error:', err);
-    }
-  });
+      `);
+    }).on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        console.warn(`Port ${p} is busy, trying ${p + 1}...`);
+        start(p + 1);
+      } else {
+        console.error('Server error:', err);
+      }
+    });
+  };
+
+  start(PORT);
 }
 
 startServer();

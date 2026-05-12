@@ -6,6 +6,12 @@ import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
 import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 
+import * as monaco from 'monaco-editor';
+import { loader } from '@monaco-editor/react';
+
+// Configure monaco-editor/react to use local monaco instance
+loader.config({ monaco });
+
 const globalScope = globalThis as any;
 
 globalScope.MonacoEnvironment = {

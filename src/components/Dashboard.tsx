@@ -341,21 +341,9 @@ export const Dashboard: React.FC = () => {
       const fileTree = res.data.fileTree;
 
       let newProject: any = null;
+      let targetProjectId = repoName; // Default to folder name for local mode
 
-      // 2. Local Storage Sync (Instant Cache)
-      if (fileTree && fileTree.length > 0) {
-        toast.info('Indexing files for offline use...', { icon: <Zap className="w-4 h-4 text-emerald-500" /> });
-        
-        // Split fileTree into chunks for smoother progress
-        const chunkSize = 20;
-        for (let i = 0; i < fileTree.length; i += chunkSize) {
-          const chunk = fileTree.slice(i, i + chunkSize);
-          await storageService.batchBackup(repoName, chunk); // Using repoName as ID for local sync
-          setImportProgress(prev => Math.min(95, prev + (30 * (chunkSize / fileTree.length))));
-        }
-      }
-
-      // 3. Add to Firestore (Optional Cloud registration)
+      // 2. Pre-determine ID for Cloud Mode
       if (user.uid !== 'local-desktop-user' && db) {
         try {
           const docRef = await addDoc(collection(db, 'projects'), {
@@ -373,10 +361,9 @@ export const Dashboard: React.FC = () => {
               avatar: user.photoURL || `https://picsum.photos/seed/${user.uid}/32/32`
             }
           });
-
-          const projectId = docRef.id;
+          targetProjectId = docRef.id;
           newProject = {
-            id: projectId,
+            id: targetProjectId,
             name: repoName,
             description: `Imported from ${githubUrl}`,
             folderName: repoName,
@@ -388,22 +375,33 @@ export const Dashboard: React.FC = () => {
               avatar: user.photoURL || `https://picsum.photos/seed/${user.uid}/32/32`
             }
           };
-
-          // Backup all imported files to Firestore (Cloud sync)
-          if (fileTree) {
-            await backupFilesToFirestore(projectId, fileTree);
-          }
         } catch (err) {
-          console.warn('Firestore import registration skipped:', err);
+          console.warn('Firestore import registration failed:', err);
         }
       } else {
-        // Local only newProject for redirection
         newProject = {
           id: repoName,
           name: repoName,
           folderName: repoName,
           ownerId: user.uid
         };
+      }
+
+      // 3. Local Storage Sync (Instant Cache) - Use the determined ID
+      if (fileTree && fileTree.length > 0) {
+        toast.info('Indexing files for offline use...', { icon: <Zap className="w-4 h-4 text-emerald-500" /> });
+        
+        const chunkSize = 20;
+        for (let i = 0; i < fileTree.length; i += chunkSize) {
+          const chunk = fileTree.slice(i, i + chunkSize);
+          await storageService.batchBackup(targetProjectId, chunk);
+          setImportProgress(prev => Math.floor(Math.min(95, prev + (35 * (chunkSize / fileTree.length)))));
+        }
+      }
+
+      // 4. Backup all imported files to Firestore (Cloud sync)
+      if (newProject && user.uid !== 'local-desktop-user' && fileTree) {
+        await backupFilesToFirestore(newProject.id, fileTree);
       }
 
       setImportProgress(100);
@@ -1523,7 +1521,7 @@ export const Dashboard: React.FC = () => {
                     />
                     <span className="relative z-10 flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Importing... {importProgress}%
+                      Importing... {Math.floor(importProgress)}%
                     </span>
                   </>
                 ) : 'Import Repository'}

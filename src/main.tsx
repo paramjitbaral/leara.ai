@@ -4,6 +4,7 @@ import App from './App.tsx';
 import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { FirebaseProvider } from './components/FirebaseProvider';
+import './monacoSetup';
 
 // Monkey-patch ResizeObserver to prevent "ResizeObserver loop completed with undelivered notifications"
 // This error is benign but triggers development overlays. Wrapping the callback in requestAnimationFrame
