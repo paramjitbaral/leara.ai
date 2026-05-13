@@ -8,6 +8,17 @@ import { localStore } from './storage';
  * Handles synchronization between Server, Local (IndexedDB), and Cloud (Firestore)
  */
 
+const isSyncEnabled = () => {
+  try {
+    const s = localStorage.getItem('leara-storage');
+    if (!s) return true;
+    const parsed = JSON.parse(s);
+    return parsed?.state?.workspaceSettings?.syncToCloud !== false;
+  } catch {
+    return true;
+  }
+};
+
 export const storageService = {
   /**
    * Save file content across all layers
@@ -26,7 +37,7 @@ export const storageService = {
       });
 
       // 3. Cloud (Silently handle if unauthenticated or offline)
-      if (db) {
+      if (db && isSyncEnabled()) {
         try {
           const fileId = path.replace(/\//g, '_');
           const fileRef = doc(db, 'projects', projectId, 'files', fileId);
@@ -68,7 +79,7 @@ export const storageService = {
       });
 
       // 3. Cloud
-      if (db) {
+      if (db && isSyncEnabled()) {
         try {
           const fileId = fullPath.replace(/\//g, '_');
           const fileRef = doc(db, 'projects', projectId, 'files', fileId);
@@ -104,7 +115,7 @@ export const storageService = {
       await localStore.deleteFile(projectId, path);
 
       // 3. Cloud
-      if (db) {
+      if (db && isSyncEnabled()) {
         try {
           const fileId = path.replace(/\//g, '_');
           await deleteDoc(doc(db, 'projects', projectId, 'files', fileId));
@@ -140,7 +151,7 @@ export const storageService = {
       });
 
       // 3. Cloud
-      if (db) {
+      if (db && isSyncEnabled()) {
         try {
           const oldFileId = oldPath.replace(/\//g, '_');
           const newFileId = newPath.replace(/\//g, '_');
@@ -177,12 +188,13 @@ export const storageService = {
   async deleteProject(userId: string, projectId: string, folderName: string) {
     try {
       // 1. Firestore
-      try {
-        await deleteDoc(doc(db, 'projects', projectId));
-      } catch (cloudError) {
-        console.warn('Cloud project deletion skipped:', cloudError);
+      if (isSyncEnabled()) {
+        try {
+          await deleteDoc(doc(db, 'projects', projectId));
+        } catch (cloudError) {
+          console.warn('Cloud project deletion skipped:', cloudError);
+        }
       }
-
       // 2. Server
       await axios.delete(`/api/files/delete?userId=${userId}&path=${folderName}`);
 
@@ -213,18 +225,20 @@ export const storageService = {
         });
 
         // Cloud (Non-blocking)
-        try {
-          const fileId = item.id.replace(/\//g, '_');
-          const fileRef = doc(db, 'projects', projectId, 'files', fileId);
-          await setDoc(fileRef, {
-            name: item.name,
-            type: item.type,
-            path: item.id,
-            projectId,
-            content: item.content || '',
-            updatedAt: serverTimestamp()
-          });
-        } catch (e) {}
+        if (isSyncEnabled()) {
+          try {
+            const fileId = item.id.replace(/\//g, '_');
+            const fileRef = doc(db, 'projects', projectId, 'files', fileId);
+            await setDoc(fileRef, {
+              name: item.name,
+              type: item.type,
+              path: item.id,
+              projectId,
+              content: item.content || '',
+              updatedAt: serverTimestamp()
+            });
+          } catch (e) {}
+        }
 
         if (item.children) {
           await processNodes(item.children);

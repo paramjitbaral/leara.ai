@@ -34,6 +34,26 @@ export interface AIPreset {
   endpoint?: string;
 }
 
+export interface EditorSettings {
+  fontFamily: string;
+  fontSize: number;
+  minimap: boolean;
+  bracketPairs: boolean;
+  smoothCaret: boolean;
+  formatOnSave: boolean;
+  aiCompletion: boolean;
+  inlayHints: boolean;
+}
+
+export interface WorkspaceSettings {
+  autoSave: boolean;
+  telemetry: boolean;
+  syncToCloud: boolean;
+  glassmorphism: boolean;
+  highDensity: boolean;
+  is2FAEnabled?: boolean;
+}
+
 interface AppState {
   user: User | null;
   setUser: (user: User | null) => void;
@@ -138,6 +158,12 @@ interface AppState {
 
   theme: 'dark' | 'light';
   setTheme: (theme: 'dark' | 'light') => void;
+
+  editorSettings: EditorSettings;
+  setEditorSettings: (settings: Partial<EditorSettings>) => void;
+
+  workspaceSettings: WorkspaceSettings;
+  setWorkspaceSettings: (settings: Partial<WorkspaceSettings>) => void;
 
   editorHighlightQuery: string;
   setEditorHighlightQuery: (query: string) => void;
@@ -436,6 +462,32 @@ export const useStore = create<AppState>()(
     set({ theme });
   },
 
+  editorSettings: {
+    fontFamily: 'JetBrains Mono',
+    fontSize: 14,
+    minimap: false,
+    bracketPairs: true,
+    smoothCaret: true,
+    formatOnSave: true,
+    aiCompletion: true,
+    inlayHints: true
+  },
+  setEditorSettings: (settings) => set((state) => ({ 
+    editorSettings: { ...state.editorSettings, ...settings } 
+  })),
+
+  workspaceSettings: {
+    autoSave: true,
+    telemetry: false,
+    syncToCloud: true,
+    glassmorphism: true,
+    highDensity: false,
+    is2FAEnabled: false
+  },
+  setWorkspaceSettings: (settings) => set((state) => ({
+    workspaceSettings: { ...state.workspaceSettings, ...settings }
+  })),
+
   editorHighlightQuery: '',
   setEditorHighlightQuery: (query) => set({ editorHighlightQuery: query }),
 
@@ -537,6 +589,8 @@ export const useStore = create<AppState>()(
     activeProject: state.activeProject,
     openFiles: state.openFiles,
     activeFile: state.activeFile,
+    editorSettings: state.editorSettings,
+    workspaceSettings: state.workspaceSettings,
     aiProvider: state.aiProvider,
     aiModel: state.aiModel,
     aiEndpoint: state.aiEndpoint,

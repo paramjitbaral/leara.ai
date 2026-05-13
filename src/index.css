@@ -60,6 +60,67 @@
     @apply text-[#cccccc] font-sans transition-colors duration-300;
   }
 
+  /* Glassmorphism Global Styles */
+  body.glass-active {
+    background: linear-gradient(135deg, var(--bg-color), rgba(16, 185, 129, 0.05), var(--bg-color), rgba(16, 185, 129, 0.08), var(--bg-color));
+    background-size: 400% 400%;
+    animation: glassGradient 15s ease infinite;
+  }
+
+  @keyframes glassGradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* When glassmorphism is active, make backgrounds of sidebars and panels translucent */
+  body.glass-active .bg-\[\#1e1e1e\] {
+    background-color: rgba(30, 30, 30, 0.6) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  body.light.glass-active .bg-\[\#1e1e1e\] {
+    background-color: rgba(255, 255, 255, 0.6) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  body.glass-active .bg-\[\#252526\] {
+    background-color: rgba(37, 37, 38, 0.6) !important;
+    backdrop-filter: blur(20px);
+  }
+
+  body.light.glass-active .bg-\[\#252526\] {
+    background-color: rgba(250, 250, 250, 0.6) !important;
+    backdrop-filter: blur(20px);
+  }
+
+  body.glass-active .bg-\[\#0b0b0b\],
+  body.glass-active .bg-\[\#0a0a0a\],
+  body.glass-active .bg-\[\#111\] {
+    background-color: rgba(11, 11, 11, 0.6) !important;
+    backdrop-filter: blur(20px);
+  }
+
+  body.light.glass-active .bg-\[\#0b0b0b\],
+  body.light.glass-active .bg-\[\#0a0a0a\],
+  body.light.glass-active .bg-\[\#111\] {
+    background-color: rgba(255, 255, 255, 0.6) !important;
+    backdrop-filter: blur(20px);
+  }
+
+  body.glass-active .bg-white {
+    background-color: rgba(255, 255, 255, 0.6) !important;
+    backdrop-filter: blur(20px);
+  }
+
+  body.glass-active .bg-\[\#0a0a0a\] {
+    background-color: rgba(10, 10, 10, 0.6) !important;
+    backdrop-filter: blur(20px);
+  }
+
+
   /* Global transition for smoother theme switching - optimized */
   .theme-transition {
     transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;

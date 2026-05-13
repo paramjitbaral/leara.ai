@@ -5,11 +5,12 @@ import { cn } from '../lib/utils';
 
 interface PinSystemProps {
   mode: 'create' | 'verify';
+  context?: 'learning' | '2fa';
   onSuccess: (pin: string) => void;
   onCancel: () => void;
 }
 
-export function PinSystem({ mode, onSuccess, onCancel }: PinSystemProps) {
+export function PinSystem({ mode, context = 'learning', onSuccess, onCancel }: PinSystemProps) {
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [isConfirming, setIsConfirming] = useState(false);
@@ -58,7 +59,8 @@ export function PinSystem({ mode, onSuccess, onCancel }: PinSystemProps) {
         }
       } else {
         // Verify mode
-        const savedPin = localStorage.getItem('learning_pin') || '1234';
+        const storageKey = context === '2fa' ? '2fa_pin' : 'learning_pin';
+        const savedPin = localStorage.getItem(storageKey) || '1234';
         if (pin === savedPin) {
           onSuccess(pin);
         } else {
@@ -89,7 +91,9 @@ export function PinSystem({ mode, onSuccess, onCancel }: PinSystemProps) {
                 ? (isConfirming ? 'Confirm 4-Digit PIN' : 'Create 4-Digit PIN')
                 : 'Enter 4-Digit PIN'}
             </h2>
-            <p className="text-xs text-zinc-500">Keep your focus locked</p>
+            <p className="text-xs text-zinc-500">
+              {context === '2fa' ? 'Unlock your workspace' : 'Keep your focus locked'}
+            </p>
           </div>
         </div>
 

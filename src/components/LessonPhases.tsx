@@ -6,6 +6,7 @@ import MonacoEditor, { OnMount } from '@monaco-editor/react';
 import { TeachingPhase, QuizPhase, CodingChallenge } from '../types';
 import { validateCodingChallenge } from '../services/ai';
 import { cn } from '../lib/utils';
+import { useStore } from '../store';
 
 // ============ TEACHING PHASE VIEW ============
 // Shows code with auto-stepping line annotations — like a teacher on a whiteboard
@@ -283,6 +284,7 @@ export function QuizView({ phase, onContinue, onReteach }: { phase: QuizPhase; o
 
 // ============ CODING CHALLENGE VIEW ============
 export function CodingView({ challenge, language, onComplete }: { challenge: CodingChallenge; language: string; onComplete: () => void }) {
+  const { editorSettings } = useStore();
   const [code, setCode] = useState(challenge.starterCode || '');
   const [result, setResult] = useState<{ correct: boolean; feedback: string; hint?: string } | null>(null);
   const [validating, setValidating] = useState(false);
@@ -362,8 +364,19 @@ export function CodingView({ challenge, language, onComplete }: { challenge: Cod
       <div className="flex-1 relative">
         <MonacoEditor height="100%" language={language} theme="vs-dark" value={code} onMount={handleMount}
           onChange={(v) => setCode(v || '')}
-          options={{ fontSize: 14, fontFamily: "'JetBrains Mono', monospace", minimap: { enabled: false }, scrollBeyondLastLine: false,
-            automaticLayout: true, padding: { top: 16 }, tabSize: 2, wordWrap: 'on', contextmenu: false }} />
+          options={{ 
+            fontSize: editorSettings?.fontSize || 14, 
+            fontFamily: editorSettings?.fontFamily ? `'${editorSettings.fontFamily}', monospace` : "'JetBrains Mono', monospace", 
+            minimap: { enabled: editorSettings?.minimap || false }, 
+            bracketPairColorization: { enabled: editorSettings?.bracketPairs !== false },
+            cursorBlinking: editorSettings?.smoothCaret !== false ? 'smooth' : 'blink',
+            cursorSmoothCaretAnimation: editorSettings?.smoothCaret !== false ? 'on' : 'off',
+            inlayHints: { enabled: editorSettings?.inlayHints !== false ? 'on' : 'off' },
+            inlineSuggest: { enabled: editorSettings?.aiCompletion !== false },
+            scrollBeyondLastLine: false,
+            automaticLayout: true, padding: { top: 16 }, tabSize: 2, wordWrap: 'on', contextmenu: false,
+            suggest: { showWords: editorSettings?.aiCompletion !== false }
+          }} />
         <div className="absolute bottom-6 right-6 flex gap-2">
           <button onClick={() => setCode(challenge.starterCode || '')}
             className="px-4 py-2.5 bg-[#333] hover:bg-[#444] text-zinc-400 rounded-xl font-bold shadow-xl flex items-center gap-2 transition-all text-sm">

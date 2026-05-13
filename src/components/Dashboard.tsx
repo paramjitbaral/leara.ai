@@ -52,6 +52,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { ApiKeyModal } from './ApiKeyModal';
 import axios from 'axios';
 import { toast } from 'sonner';
+import { PinSystem } from './PinSystem';
 
 const ProjectSkeleton: React.FC<{ theme: 'dark' | 'light' }> = ({ theme }) => (
   <div className={cn(
@@ -92,16 +93,21 @@ export const Dashboard: React.FC = () => {
     isApiKeyModalOpen,
     setIsApiKeyModalOpen,
     userApiKey,
-    setUserApiKey
+    setUserApiKey,
+    editorSettings,
+    setEditorSettings,
+    workspaceSettings,
+    setWorkspaceSettings,
+    providerKeys
   } = useStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [projects, setProjects] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'home' | 'dashboard' | 'projects' | 'favorites' | 'settings'>('dashboard');
 
-  // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isSettingUp2FA, setIsSettingUp2FA] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<{ id: string, folderName: string } | null>(null);
   const [newProjectName, setNewProjectName] = useState('');
@@ -676,8 +682,9 @@ export const Dashboard: React.FC = () => {
       {/* Main Content - Modern Bento Grid Layout */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className={cn(
-          "h-14 flex items-center justify-between px-8 z-10 shrink-0",
+        {activeTab !== 'settings' && (
+          <header className={cn(
+            "h-14 flex items-center justify-between px-8 z-10 shrink-0",
           theme === 'dark' ? "bg-[#0b0b0b]" : "bg-white"
         )}>
           <div className="flex items-center gap-4">
@@ -689,7 +696,6 @@ export const Dashboard: React.FC = () => {
               {activeTab === 'dashboard' && <Cpu className="w-4 h-4" />}
               {activeTab === 'projects' && <FolderOpen className="w-4 h-4" />}
               {activeTab === 'favorites' && <Sparkles className="w-4 h-4" />}
-              {activeTab === 'settings' && <Settings className="w-4 h-4" />}
             </div>
             <div className="flex flex-col">
               <h1 className={cn(
@@ -700,7 +706,6 @@ export const Dashboard: React.FC = () => {
                 {activeTab === 'dashboard' && 'Active Environments'}
                 {activeTab === 'projects' && 'Source Explorer'}
                 {activeTab === 'favorites' && 'Pinned Projects'}
-                {activeTab === 'settings' && 'System Preferences'}
               </h1>
               <p className={cn(
                 "text-[11px] font-normal opacity-70",
@@ -710,7 +715,6 @@ export const Dashboard: React.FC = () => {
                 {activeTab === 'dashboard' && 'Manage your local playgrounds'}
                 {activeTab === 'projects' && 'Browse repositories'}
                 {activeTab === 'favorites' && 'Quick access'}
-                {activeTab === 'settings' && 'Configure workspace'}
               </p>
             </div>
           </div>
@@ -752,8 +756,9 @@ export const Dashboard: React.FC = () => {
             </button>
           </div>
         </header>
+        )}
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className={cn("flex-1 overflow-y-auto", activeTab !== 'settings' && "p-6 space-y-6")}>
           {activeTab === 'home' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1070,7 +1075,7 @@ export const Dashboard: React.FC = () => {
           )}
           {activeTab === 'settings' && (
             <div className={cn(
-              "flex flex-1 -m-8 h-[calc(100vh-80px)]",
+              "flex h-full w-full overflow-hidden",
               theme === 'dark' ? "bg-[#0a0a0a]" : "bg-white"
             )}>
               {/* Settings Sidebar */}
@@ -1094,36 +1099,26 @@ export const Dashboard: React.FC = () => {
                       )}
                     >
                       <subTab.icon className={cn("w-4 h-4", settingsSubTab === subTab.id ? "text-emerald-400" : "text-zinc-600")} />
-                      <span className="text-xs">{subTab.label}</span>
+                      <span className="text-sm">{subTab.label}</span>
                     </button>
                   ))}
                 </nav>
-                <div className="mt-auto p-4 border-t border-white/5">
-                  <button
-                    onClick={() => logOut()}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/5 rounded-xl transition-all group"
-                  >
-                    <LogOut className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                    <span className="text-xs font-bold uppercase tracking-wider">Logout</span>
-                  </button>
-                </div>
               </aside>
 
               {/* Settings Content Area */}
               <div className="flex-1 flex flex-col min-w-0 bg-white/[0.01]">
-
-                <div className="flex-1 overflow-y-auto p-8 space-y-10">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-8 space-y-10">
                   {settingsSubTab === 'general' && (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                       <div className="space-y-4">
                         <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">Workspace Management</h4>
                         <div className="space-y-1">
                           {[
-                            { label: 'Auto-save changes', desc: 'Automatically commit changes to the local filesystem', enabled: true },
-                            { label: 'Telemetry', desc: 'Share anonymous usage data to help improve Leara', enabled: false },
-                            { label: 'Sync to Cloud', desc: 'Real-time backup of your workspace to secure cloud storage', enabled: user?.uid !== 'local-desktop-user' },
+                            { id: 'autoSave', label: 'Auto-save changes', desc: 'Automatically commit changes to the local filesystem', enabled: workspaceSettings.autoSave, toggle: () => setWorkspaceSettings({ autoSave: !workspaceSettings.autoSave }) },
+                            { id: 'telemetry', label: 'Telemetry', desc: 'Share anonymous usage data to help improve Leara', enabled: workspaceSettings.telemetry, toggle: () => setWorkspaceSettings({ telemetry: !workspaceSettings.telemetry }) },
+                            { id: 'sync', label: 'Sync to Cloud', desc: 'Real-time backup of your workspace to secure cloud storage', enabled: workspaceSettings.syncToCloud && user?.uid !== 'local-desktop-user', toggle: () => { if(user?.uid !== 'local-desktop-user') setWorkspaceSettings({ syncToCloud: !workspaceSettings.syncToCloud }); else toast.error('Cloud sync not available in Local Mode'); } },
                           ].map((pref, i) => (
-                            <div key={i} className="flex items-center justify-between p-4 rounded-xl hover:bg-white/[0.02] transition-all group">
+                            <div key={i} onClick={pref.toggle} className="flex items-center justify-between p-4 rounded-xl hover:bg-white/[0.02] transition-all group cursor-pointer">
                               <div className="space-y-0.5">
                                 <p className={cn(
                                   "text-sm font-bold",
@@ -1132,7 +1127,7 @@ export const Dashboard: React.FC = () => {
                                 <p className="text-xs text-zinc-500 font-medium">{pref.desc}</p>
                               </div>
                               <div className={cn(
-                                "w-10 h-5 rounded-full p-1 transition-all cursor-pointer relative",
+                                "w-10 h-5 rounded-full p-1 transition-all relative",
                                 pref.enabled ? 'bg-emerald-500' : 'bg-zinc-800'
                               )}>
                                 <div className={cn(
@@ -1216,15 +1211,19 @@ export const Dashboard: React.FC = () => {
                       </div>
 
                       <div className="p-6 rounded-2xl bg-white/5 border border-white/5 space-y-4">
-                        <h4 className="text-xs font-black uppercase tracking-widest text-white/50">Interface Polish</h4>
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">Interface Polish</h4>
                         <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-bold text-zinc-300">Glassmorphism Effects</span>
-                            <div className="w-10 h-5 bg-emerald-500 rounded-full p-1"><div className="w-3 h-3 bg-white rounded-full translate-x-5" /></div>
+                          <div className="flex items-center justify-between cursor-pointer" onClick={() => setWorkspaceSettings({ glassmorphism: !workspaceSettings.glassmorphism })}>
+                            <span className={cn("text-sm font-bold", theme === 'dark' ? "text-zinc-300" : "text-zinc-900")}>Glassmorphism Effects</span>
+                            <div className={cn("w-10 h-5 rounded-full p-1 transition-all", workspaceSettings.glassmorphism ? "bg-emerald-500" : "bg-zinc-800")}>
+                              <div className={cn("w-3 h-3 bg-white rounded-full transition-all", workspaceSettings.glassmorphism ? "translate-x-5" : "translate-x-0")} />
+                            </div>
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-bold text-zinc-300">High-Density Explorer</span>
-                            <div className="w-10 h-5 bg-emerald-500 rounded-full p-1"><div className="w-3 h-3 bg-white rounded-full translate-x-5" /></div>
+                          <div className="flex items-center justify-between cursor-pointer" onClick={() => setWorkspaceSettings({ highDensity: !workspaceSettings.highDensity })}>
+                            <span className={cn("text-sm font-bold", theme === 'dark' ? "text-zinc-300" : "text-zinc-900")}>High-Density Explorer</span>
+                            <div className={cn("w-10 h-5 rounded-full p-1 transition-all", workspaceSettings.highDensity ? "bg-emerald-500" : "bg-zinc-800")}>
+                              <div className={cn("w-3 h-3 bg-white rounded-full transition-all", workspaceSettings.highDensity ? "translate-x-5" : "translate-x-0")} />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1236,32 +1235,65 @@ export const Dashboard: React.FC = () => {
                       <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-2">
                           <label className="text-xs font-black uppercase tracking-[0.2em] text-zinc-500 ml-1">Font Family</label>
-                          <select className="w-full bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none">
-                            <option>JetBrains Mono</option>
-                            <option>Cascadia Code</option>
-                            <option>Fira Code</option>
-                            <option>Roboto Mono</option>
+                          <select 
+                            value={editorSettings.fontFamily}
+                            onChange={(e) => setEditorSettings({ fontFamily: e.target.value })}
+                            className="w-full bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none"
+                          >
+                            <optgroup label="Modern / Coding">
+                              <option value="JetBrains Mono">JetBrains Mono</option>
+                              <option value="Cascadia Code">Cascadia Code</option>
+                              <option value="Fira Code">Fira Code</option>
+                              <option value="Roboto Mono">Roboto Mono</option>
+                            </optgroup>
+                            <optgroup label="Simple / Clean">
+                              <option value="Inter">Inter</option>
+                              <option value="Roboto">Roboto</option>
+                              <option value="Arial">Arial</option>
+                              <option value="Helvetica">Helvetica</option>
+                            </optgroup>
+                            <optgroup label="Formal / Serif">
+                              <option value="Times New Roman">Times New Roman</option>
+                              <option value="Georgia">Georgia</option>
+                              <option value="Garamond">Garamond</option>
+                            </optgroup>
                           </select>
                         </div>
                         <div className="space-y-2">
                           <label className="text-xs font-black uppercase tracking-[0.2em] text-zinc-500 ml-1">Font Size</label>
                           <div className="flex items-center gap-4">
-                            <input type="range" className="flex-1 accent-emerald-500" defaultValue={14} />
-                            <span className="w-10 text-center font-bold text-sm text-white">14px</span>
+                            <input 
+                              type="range" 
+                              min="10" max="24" step="1"
+                              value={editorSettings.fontSize}
+                              onChange={(e) => setEditorSettings({ fontSize: parseInt(e.target.value) })}
+                              className="flex-1 accent-emerald-500" 
+                            />
+                            <span className="w-10 text-center font-bold text-sm text-white">{editorSettings.fontSize}px</span>
                           </div>
                         </div>
                       </div>
 
                       <div className="p-6 rounded-2xl bg-white/5 border border-white/5 space-y-4">
-                        <h4 className="text-xs font-black uppercase tracking-widest text-zinc-500">Editor Features</h4>
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">Editor Features</h4>
                         <div className="grid grid-cols-2 gap-x-12 gap-y-2">
                           {[
-                            'Minimap Enabled', 'Bracket Pair Colorization', 'Smooth Caret Animation',
-                            'Format on Save', 'AI Code Completion', 'Inlay Hints'
+                            { key: 'minimap', label: 'Minimap Enabled', val: editorSettings.minimap },
+                            { key: 'bracketPairs', label: 'Bracket Pair Colorization', val: editorSettings.bracketPairs },
+                            { key: 'smoothCaret', label: 'Smooth Caret Animation', val: editorSettings.smoothCaret },
+                            { key: 'formatOnSave', label: 'Format on Save', val: editorSettings.formatOnSave },
+                            { key: 'aiCompletion', label: 'AI Code Completion', val: editorSettings.aiCompletion },
+                            { key: 'inlayHints', label: 'Inlay Hints', val: editorSettings.inlayHints }
                           ].map((feat) => (
-                            <div key={feat} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.02] px-2 rounded-lg transition-all">
-                              <span className="text-xs font-bold text-zinc-300">{feat}</span>
-                              <div className="w-8 h-4 bg-emerald-500 rounded-full p-0.5"><div className="w-3 h-3 bg-white rounded-full translate-x-4" /></div>
+                            <div 
+                              key={feat.key} 
+                              onClick={() => setEditorSettings({ [feat.key]: !feat.val })}
+                              className="flex items-center justify-between py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.02] px-2 rounded-lg transition-all cursor-pointer"
+                            >
+                              <span className={cn("text-xs font-bold", theme === 'dark' ? "text-zinc-300" : "text-zinc-900")}>{feat.label}</span>
+                              <div className={cn("w-8 h-4 rounded-full p-0.5 transition-all", feat.val ? "bg-emerald-500" : "bg-zinc-800")}>
+                                <div className={cn("w-3 h-3 bg-white rounded-full transition-all", feat.val ? "translate-x-4" : "translate-x-0")} />
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1285,8 +1317,8 @@ export const Dashboard: React.FC = () => {
                         <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">Connected Providers</h4>
                         <div className="space-y-3">
                           {[
-                            { id: 'gemini', name: 'Google Gemini 1.5 Pro', status: useStore.getState().providerKeys.gemini ? 'Connected' : 'Missing Key', icon: Globe },
-                            { id: 'openai', name: 'OpenAI GPT-4o', status: useStore.getState().providerKeys.openai ? 'Connected' : 'Missing Key', icon: Cpu },
+                            { id: 'gemini', name: 'Google Gemini 1.5 Pro', status: providerKeys.gemini ? 'Connected' : 'Missing Key', icon: Globe },
+                            { id: 'openai', name: 'OpenAI GPT-4o', status: providerKeys.openai ? 'Connected' : 'Missing Key', icon: Cpu },
                             { id: 'ollama', name: 'Ollama (Local LLM)', status: 'System Default', icon: Monitor },
                           ].map((p) => (
                             <div key={p.id} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-all group">
@@ -1334,13 +1366,45 @@ export const Dashboard: React.FC = () => {
                       <div className="space-y-4">
                         <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">Security Actions</h4>
                         <div className="grid grid-cols-2 gap-4">
-                          <button className="p-4 rounded-xl bg-white/5 border border-white/5 text-left hover:bg-white/10 transition-all group">
-                            <h5 className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">Setup Two-Factor Auth</h5>
-                            <p className="text-xs text-zinc-500 font-medium mt-1">Add an extra layer of security</p>
+                          <button 
+                            onClick={() => {
+                              if (workspaceSettings.is2FAEnabled) {
+                                setWorkspaceSettings({ is2FAEnabled: false });
+                                localStorage.removeItem('2fa_pin');
+                                toast.success('Two-Factor Auth Disabled');
+                              } else {
+                                setIsSettingUp2FA(true);
+                              }
+                            }}
+                            className={cn(
+                              "p-4 rounded-xl border text-left transition-all group",
+                              workspaceSettings.is2FAEnabled 
+                                ? "bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20" 
+                                : "bg-white/5 border-white/5 hover:bg-white/10"
+                            )}
+                          >
+                            <h5 className={cn("text-sm font-bold transition-colors", workspaceSettings.is2FAEnabled ? "text-emerald-400" : "text-white group-hover:text-emerald-400")}>
+                              {workspaceSettings.is2FAEnabled ? 'Disable Two-Factor Auth' : 'Setup Two-Factor Auth'}
+                            </h5>
+                            <p className="text-xs text-zinc-500 font-medium mt-1">
+                              {workspaceSettings.is2FAEnabled ? 'Remove extra security layer' : 'Add an extra layer of security'}
+                            </p>
                           </button>
-                          <button className="p-4 rounded-xl bg-red-500/5 border border-red-500/10 text-left hover:bg-red-500/10 transition-all group">
-                            <h5 className="text-sm font-bold text-red-400">Delete Account</h5>
-                            <p className="text-xs text-zinc-500 font-medium mt-1">Permanently remove your data</p>
+                          <button onClick={async () => {
+                            try {
+                              toast.loading('Logging out...', { id: 'logout' });
+                              await logOut();
+                              useStore.getState().setUser(null);
+                              toast.success('Logged out successfully', { id: 'logout' });
+                            } catch (err) {
+                              toast.error('Failed to log out', { id: 'logout' });
+                            }
+                          }} className="p-4 rounded-xl bg-red-500/5 border border-red-500/10 text-left hover:bg-red-500/10 transition-all group">
+                            <div className="flex items-center gap-2">
+                              <LogOut className="w-4 h-4 text-red-400" />
+                              <h5 className="text-sm font-bold text-red-400">Log Out</h5>
+                            </div>
+                            <p className="text-xs text-zinc-500 font-medium mt-1">Sign out of this device</p>
                           </button>
                         </div>
                       </div>
@@ -1357,6 +1421,20 @@ export const Dashboard: React.FC = () => {
         isOpen={isApiKeyModalOpen}
         onClose={() => setIsApiKeyModalOpen(false)}
       />
+
+      {isSettingUp2FA && (
+        <PinSystem
+          mode="create"
+          context="2fa"
+          onSuccess={(pin) => {
+            localStorage.setItem('2fa_pin', pin);
+            setWorkspaceSettings({ is2FAEnabled: true });
+            setIsSettingUp2FA(false);
+            toast.success('Two-Factor Authentication Enabled');
+          }}
+          onCancel={() => setIsSettingUp2FA(false)}
+        />
+      )}
 
       {/* Create Project Dialog */}
       <Dialog.Root open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>

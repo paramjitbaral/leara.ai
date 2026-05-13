@@ -14,7 +14,7 @@ export function FileExplorer() {
   const {
     user, userId, files, setFiles, addOpenFile, removeOpenFile, setActiveFile, activeFile,
     setCurrentView, activeProject, theme, setEditorHighlightQuery, setSidebarTab, modifiedFiles,
-    refreshFiles
+    refreshFiles, workspaceSettings
   } = useStore();
   const [loading, setLoading] = useState(false);
   const [githubUrl, setGithubUrl] = useState('');
@@ -292,7 +292,9 @@ export function FileExplorer() {
                   <div
                     role="button"
                     className={cn(
-                      "flex items-center gap-2 px-2 py-1.5 hover:bg-[#2a2d2e] cursor-pointer transition-all active:scale-[0.98] group rounded-md mx-1",
+                      "flex items-center gap-2 cursor-pointer transition-all active:scale-[0.98] group rounded-md mx-1",
+                      workspaceSettings.highDensity ? "px-1 py-0.5" : "px-2 py-1.5",
+                      theme === 'dark' ? "hover:bg-[#2a2d2e]" : "hover:bg-zinc-200",
                       isActive ? "bg-[#37373d] text-white" : "text-zinc-400"
                     )}
                     onClick={() => node.type === 'directory' ? toggleExpand(node.id) : openFile(node)}

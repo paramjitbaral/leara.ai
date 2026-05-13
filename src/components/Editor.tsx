@@ -26,7 +26,8 @@ export function Editor() {
     activeFile, setActiveFile, userId, theme, activeProject, 
     editorHighlightQuery, setEditorHighlightQuery, 
     editorScrollLine, setEditorScrollLine,
-    setSidebarTab, setIsAIPanelOpen, setModified, originalContents
+    setSidebarTab, setIsAIPanelOpen, setModified, originalContents,
+    editorSettings
   } = useStore();
 
   useEffect(() => {
@@ -115,6 +116,21 @@ export function Editor() {
     setModified(activeFile.id, newContent !== original);
     
     clearHighlight();
+
+    if (useStore.getState().workspaceSettings.autoSave) {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(async () => {
+        if (useStore.getState().editorSettings.formatOnSave && editorRef.current) {
+          try {
+            await editorRef.current.getAction('editor.action.formatDocument')?.run();
+          } catch (e) {
+            console.warn('Format on save failed:', e);
+          }
+        }
+        // Always get the freshest value in case formatting changed it
+        handleSave(editorRef.current ? editorRef.current.getValue() : newContent);
+      }, 1000);
+    }
   };
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
@@ -124,12 +140,47 @@ export function Editor() {
     editor.onKeyDown(() => clearHighlight());
 
     // Manual Save Keybinding (Ctrl + S)
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, async () => {
+      if (useStore.getState().editorSettings.formatOnSave) {
+        try {
+          await editor.getAction('editor.action.formatDocument')?.run();
+        } catch (e) {
+          console.warn('Format on save failed:', e);
+        }
+      }
       const content = editor.getValue();
       handleSave(content);
       toast.success('File saved manually', {
         icon: <Save className="w-4 h-4 text-emerald-500" />
       });
+    });
+
+    // Simulated AI Inline Completion Provider
+    const aiCompletionProvider = monaco.languages.registerInlineCompletionsProvider('*', {
+      provideInlineCompletions: async (model, position) => {
+        if (!useStore.getState().editorSettings.aiCompletion) return { items: [] };
+        
+        const lineContent = model.getLineContent(position.lineNumber).trim();
+        
+        // Simple mock AI completions based on common patterns
+        if (lineContent === 'function calculateTotal') {
+          return { items: [{ insertText: '(price, tax) {\n  return price + (price * tax);\n}' }] };
+        }
+        if (lineContent === 'const fetchUser') {
+          return { items: [{ insertText: ' = async (id) => {\n  const res = await fetch(`/api/users/${id}`);\n  return res.json();\n};' }] };
+        }
+        if (lineContent === 'import React') {
+          return { items: [{ insertText: ', { useState, useEffect } from "react";' }] };
+        }
+
+        return { items: [] };
+      },
+      freeInlineCompletions: () => {}
+    });
+
+    // Cleanup on dispose
+    editor.onDidDispose(() => {
+      aiCompletionProvider.dispose();
     });
 
     // Add Context Menu Actions
@@ -306,9 +357,14 @@ export function Editor() {
           onMount={handleEditorDidMount}
           onChange={handleEditorChange}
           options={{
-            fontSize: 13,
-            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-            minimap: { enabled: false },
+            fontSize: editorSettings?.fontSize || 14,
+            fontFamily: editorSettings?.fontFamily ? `'${editorSettings.fontFamily}', monospace` : "'JetBrains Mono', 'Fira Code', monospace",
+            minimap: { enabled: editorSettings?.minimap || false },
+            bracketPairColorization: { enabled: editorSettings?.bracketPairs !== false },
+            cursorBlinking: editorSettings?.smoothCaret !== false ? 'smooth' : 'blink',
+            cursorSmoothCaretAnimation: editorSettings?.smoothCaret !== false ? 'on' : 'off',
+            inlayHints: { enabled: editorSettings?.inlayHints !== false ? 'on' : 'off' },
+            inlineSuggest: { enabled: editorSettings?.aiCompletion !== false },
             scrollBeyondLastLine: false,
             automaticLayout: true,
             padding: { top: 16 },
@@ -316,9 +372,9 @@ export function Editor() {
             renderWhitespace: 'none',
             tabSize: 2,
             wordWrap: 'on',
-            cursorBlinking: 'smooth',
             smoothScrolling: true,
             contextmenu: true,
+            suggest: { showWords: editorSettings?.aiCompletion !== false }
           }}
         />
       </div>

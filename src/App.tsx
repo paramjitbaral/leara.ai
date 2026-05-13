@@ -6,7 +6,7 @@ import { TabBar } from './components/TabBar';
 import { TopBar } from './components/TopBar';
 import { Terminal } from './components/Terminal';
 import { Dashboard } from './components/Dashboard';
-import { completeExternalSignIn, signIn, auth, googleProvider, initFirebaseIfEnabled } from './firebase';
+import { completeExternalSignIn, signIn, logOut, auth, googleProvider, initFirebaseIfEnabled } from './firebase';
 import { useFirebase } from './components/FirebaseProvider';
 import { Toaster, toast } from 'sonner';
 import { LearaLogo } from './components/LearaLogo';
@@ -14,6 +14,7 @@ import { Terminal as TerminalIcon, PanelRight, Minimize2, Loader2, Info, Setting
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { telemetry } from './lib/telemetry';
 
 // Lazy load components that aren't immediately visible
 const CodeSearch = lazy(() => import('./components/CodeSearch').then(m => ({ default: m.CodeSearch })));
@@ -51,7 +52,8 @@ export default function App() {
     previewUrl, setUser,
     sidebarTab, setSidebarTab,
     terminalType, setTerminalType, isTerminalOpen, setIsTerminalOpen,
-    scmChangedFiles, modifiedFiles
+    scmChangedFiles, modifiedFiles,
+    editorSettings, workspaceSettings
   } = useStore();
 
   const totalChangeCount = Array.from(new Set([
@@ -69,7 +71,37 @@ export default function App() {
       document.documentElement.classList.remove('light');
       document.body.classList.remove('light');
     }
-  }, [theme]);
+
+    if (workspaceSettings?.glassmorphism) {
+      document.body.classList.add('glass-active');
+    } else {
+      document.body.classList.remove('glass-active');
+    }
+
+    if (workspaceSettings?.highDensity) {
+      document.body.classList.add('density-high');
+    } else {
+      document.body.classList.remove('density-high');
+    }
+
+    if (editorSettings?.fontFamily) {
+      document.documentElement.style.setProperty('--font-sans', `'${editorSettings.fontFamily}', system-ui, sans-serif`);
+      document.documentElement.style.setProperty('--font-mono', `'${editorSettings.fontFamily}', monospace`);
+    } else {
+      document.documentElement.style.removeProperty('--font-sans');
+      document.documentElement.style.removeProperty('--font-mono');
+    }
+
+    if (editorSettings?.fontSize) {
+      document.documentElement.style.fontSize = `${editorSettings.fontSize}px`;
+    } else {
+      document.documentElement.style.fontSize = '14px';
+    }
+  }, [theme, workspaceSettings?.glassmorphism, workspaceSettings?.highDensity, editorSettings?.fontFamily, editorSettings?.fontSize]);
+
+  useEffect(() => {
+    telemetry.log('App Started', { timestamp: Date.now() });
+  }, []);
 
   // Warm up heavier panels for faster menu actions
   useEffect(() => {
@@ -91,6 +123,16 @@ export default function App() {
   const [isPreviewResizing, setIsPreviewResizing] = useState(false);
   const [previewWidth, setPreviewWidth] = useState(400);
   const [showEnterPin, setShowEnterPin] = useState(false);
+  const [is2FALocked, setIs2FALocked] = useState(() => {
+    // Check local storage directly to avoid zustand hydration issues on first render
+    try {
+      const s = localStorage.getItem('leara-storage');
+      if (s) {
+        return JSON.parse(s)?.state?.workspaceSettings?.is2FAEnabled || false;
+      }
+    } catch {}
+    return false;
+  });
   const [isThemeTransitioning, setIsThemeTransitioning] = useState(false);
   const [aiSidebarWidth, setAiSidebarWidth] = useState(320);
   const [isResizingAI, setIsResizingAI] = useState(false);
@@ -528,6 +570,24 @@ export default function App() {
 
         {/* Global Texture */}
         <div className="absolute inset-0 opacity-[0.015] pointer-events-none bg-noise" />
+      </div>
+    );
+  }
+
+  if (is2FALocked && user) {
+    return (
+      <div className="fixed inset-0 z-[9999] bg-[#0a0a0a]">
+        <Suspense fallback={<LazyComponentFallback />}>
+          <PinSystem
+            mode="verify"
+            context="2fa"
+            onSuccess={(pin) => setIs2FALocked(false)}
+            onCancel={() => {
+              logOut();
+              setUser(null);
+            }}
+          />
+        </Suspense>
       </div>
     );
   }
