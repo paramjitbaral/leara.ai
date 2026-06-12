@@ -36,6 +36,24 @@ export function TopBar({ onEnterLearnMode }: TopBarProps) {
 
   const [openMenu, setOpenMenu] = React.useState<string | null>(null);
   const [menuMode, setMenuMode] = React.useState(false);
+  const [updateAvailable, setUpdateAvailable] = React.useState<{version: string, url: string} | null>(null);
+
+  React.useEffect(() => {
+    // Check for updates in the background directly from your GitHub repo
+    fetch('https://raw.githubusercontent.com/paramjitbaral/leara.ai-downloader/master/public/version.json')
+      .then(res => res.json())
+      .then(data => {
+        // We assume 0.0.0 is the base version.
+        const currentVersion = '0.0.0'; 
+        if (data.version && data.version !== currentVersion) {
+          // If a new version is found, point the user to download it
+          setUpdateAvailable({ version: data.version, url: data.filename || 'https://github.com/paramjitbaral/leara.ai-downloader/releases' });
+        }
+      })
+      .catch(() => {
+        // Silently fail if offline or server is unreachable
+      });
+  }, []);
 
   // Close open menu when clicking outside any topbar menu/trigger or pressing Escape
   React.useEffect(() => {
@@ -416,6 +434,17 @@ export function TopBar({ onEnterLearnMode }: TopBarProps) {
             ))}
 
             <div className={cn("h-3.5 w-[1px] mx-1", theme === 'dark' ? "bg-white/10" : "bg-zinc-200")} />
+
+            {updateAvailable && (
+              <button
+                onClick={() => window.open(updateAvailable.url, '_blank')}
+                title={`Version ${updateAvailable.version} is available!`}
+                className="flex items-center gap-1.5 px-2.5 py-1 mr-1 rounded-md text-[9px] font-bold uppercase tracking-widest bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white transition-all hover:scale-105 active:scale-95"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                Update
+              </button>
+            )}
 
             <button
               onClick={onEnterLearnMode}

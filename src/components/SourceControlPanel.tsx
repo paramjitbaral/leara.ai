@@ -63,7 +63,13 @@ export function SourceControlPanel() {
       useStore.getState().setScmChangedFiles(paths);
       
     } catch (err: any) {
-      toast.error('SCM status failed', { description: err?.response?.data?.error || err.message });
+      const msg = err?.response?.data?.error || err.message;
+      if (typeof msg === 'string' && msg.toLowerCase().includes('not a git repository')) {
+        // Silently fail if it's just not a git repo yet
+        setStatus(null);
+      } else {
+        toast.error('SCM status failed', { description: msg });
+      }
     } finally {
       setLoading(false);
     }

@@ -168,7 +168,7 @@ function TerminalInstance({ id, type, isActive }: TerminalInstanceProps) {
         brightCyan: '#005b70',
         brightWhite: '#1a1a1a',
       },
-      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+      fontFamily: "'Inter', 'Fira Code', monospace",
       fontSize: 11,
       cursorBlink: true,
       allowProposedApi: true,

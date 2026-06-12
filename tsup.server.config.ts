@@ -1,4 +1,7 @@
 import { defineConfig } from 'tsup';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 export default defineConfig({
   entry: ['server.ts'],
@@ -15,4 +18,9 @@ export default defineConfig({
     'node-pty',
     'vite',
   ],
+  env: {
+    GITHUB_OAUTH_CLIENT_ID: process.env.GITHUB_OAUTH_CLIENT_ID || '',
+    GITHUB_OAUTH_CLIENT_SECRET: process.env.GITHUB_OAUTH_CLIENT_SECRET || '',
+    GITHUB_OAUTH_REDIRECT_URI: process.env.GITHUB_OAUTH_REDIRECT_URI || '',
+  }
 });

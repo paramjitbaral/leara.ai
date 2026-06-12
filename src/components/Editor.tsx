@@ -358,7 +358,7 @@ export function Editor() {
           onChange={handleEditorChange}
           options={{
             fontSize: editorSettings?.fontSize || 14,
-            fontFamily: editorSettings?.fontFamily ? `'${editorSettings.fontFamily}', monospace` : "'JetBrains Mono', 'Fira Code', monospace",
+            fontFamily: editorSettings?.fontFamily ? `'${editorSettings.fontFamily}', monospace` : "'Inter', 'Fira Code', monospace",
             minimap: { enabled: editorSettings?.minimap || false },
             bracketPairColorization: { enabled: editorSettings?.bracketPairs !== false },
             cursorBlinking: editorSettings?.smoothCaret !== false ? 'smooth' : 'blink',

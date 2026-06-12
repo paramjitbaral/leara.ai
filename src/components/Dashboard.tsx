@@ -1241,7 +1241,7 @@ export const Dashboard: React.FC = () => {
                             className="w-full bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none"
                           >
                             <optgroup label="Modern / Coding">
-                              <option value="JetBrains Mono">JetBrains Mono</option>
+                              <option value="Inter">Inter</option>
                               <option value="Cascadia Code">Cascadia Code</option>
                               <option value="Fira Code">Fira Code</option>
                               <option value="Roboto Mono">Roboto Mono</option>

@@ -463,7 +463,7 @@ export const useStore = create<AppState>()(
   },
 
   editorSettings: {
-    fontFamily: 'JetBrains Mono',
+    fontFamily: 'Inter',
     fontSize: 14,
     minimap: false,
     bracketPairs: true,

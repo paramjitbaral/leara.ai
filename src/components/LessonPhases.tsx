@@ -366,7 +366,7 @@ export function CodingView({ challenge, language, onComplete }: { challenge: Cod
           onChange={(v) => setCode(v || '')}
           options={{ 
             fontSize: editorSettings?.fontSize || 14, 
-            fontFamily: editorSettings?.fontFamily ? `'${editorSettings.fontFamily}', monospace` : "'JetBrains Mono', monospace", 
+            fontFamily: editorSettings?.fontFamily ? `'${editorSettings.fontFamily}', monospace` : "'Inter', monospace", 
             minimap: { enabled: editorSettings?.minimap || false }, 
             bracketPairColorization: { enabled: editorSettings?.bracketPairs !== false },
             cursorBlinking: editorSettings?.smoothCaret !== false ? 'smooth' : 'blink',
