@@ -592,7 +592,7 @@ app.post("/api/ai/copilot", async (req, res) => {
               'Authorization': `Bearer ${key}`,
               'Content-Type': 'application/json'
             },
-            timeout: 10000 
+            timeout: 60000 
           });
         };
 
@@ -1478,10 +1478,12 @@ async function startServer() {
     let ptyProcess: any;
     try {
       if (!pty) {
+        const { createRequire } = await import('module');
+        const customRequire = createRequire(typeof __filename !== 'undefined' ? __filename : import.meta.url);
         try {
-          // Use require() instead of import() because import() uses ESM resolution
-          // which ignores NODE_PATH. require() respects NODE_PATH.
-          pty = require('@homebridge/node-pty-prebuilt-multiarch');
+          // Use customRequire() instead of import() because import() uses ESM resolution
+          // which ignores NODE_PATH. customRequire() respects NODE_PATH.
+          pty = customRequire('@homebridge/node-pty-prebuilt-multiarch');
         } catch (e1: any) {
           console.warn('[PTY] Standard require failed, trying unpacked path...', e1.message);
           try {
@@ -1493,10 +1495,10 @@ async function startServer() {
               const unpackedFilePath = path.join(unpackedPkgPath, 'lib', 'index.js');
               
               if (fs.existsSync(unpackedFilePath)) {
-                pty = require(unpackedFilePath);
+                pty = customRequire(unpackedFilePath);
                 console.log('[PTY] Loaded from direct file path successfully');
               } else if (fs.existsSync(unpackedPkgPath)) {
-                pty = require(unpackedPkgPath);
+                pty = customRequire(unpackedPkgPath);
                 console.log('[PTY] Loaded from unpacked package path successfully');
               } else {
                 throw new Error(`PTY paths not found: ${unpackedFilePath}`);

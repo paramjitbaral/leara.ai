@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { X, Key, ShieldCheck, Eye, EyeOff, Cpu, Globe, Monitor, Settings2, Link, Trash2, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { X, Key, ShieldCheck, Eye, EyeOff, Cpu, Globe, Monitor, Settings2, Link, Trash2, ChevronRight, CheckCircle2, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useStore, AIPreset } from '../store';
 import { toast } from 'sonner';
@@ -223,7 +223,12 @@ export function ApiKeyModal({ isOpen, onClose }: ApiKeyModalProps) {
                       isDark ? "text-zinc-400 bg-white/[0.04] border-white/[0.08] hover:text-white hover:bg-white/[0.08]" : "text-zinc-500 bg-zinc-50 border-zinc-200 hover:bg-zinc-100"
                     )}
                   >
-                    {isTesting ? 'Testing…' : testResult === 'success' ? '✓ Connected' : testResult === 'error' ? '✗ Failed' : 'Test Connection'}
+                    {isTesting ? (
+                      <span className="flex items-center gap-1.5">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Testing…
+                      </span>
+                    ) : testResult === 'success' ? '✓ Connected' : testResult === 'error' ? '✗ Failed' : 'Test Connection'}
                   </button>
                 </div>
 
