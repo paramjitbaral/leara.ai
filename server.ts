@@ -1483,12 +1483,17 @@ function buildTerminalEnv(cwd: string, userRoot: string, isWindows: boolean): Re
   }
   
   const separator = isWindows ? ';' : ':';
-  env.PATH = [...extraPaths, systemPath].filter(Boolean).join(separator);
+  const pathKey = Object.keys(env).find(k => k.toLowerCase() === 'path') || 'PATH';
+  env[pathKey] = [...extraPaths, systemPath].filter(Boolean).join(separator);
   
   // 4. Set proper shell environment variables
   env.HOME = userRoot;
   env.USERPROFILE = userRoot;
   env.TERM = 'xterm-256color';
+  
+  // NEVER inherit NODE_ENV=production in the user's terminal, 
+  // otherwise `npm install` skips devDependencies like `vite`!
+  delete env.NODE_ENV;
   
   // 5. Windows-critical: ensure system vars are present
   if (isWindows) {

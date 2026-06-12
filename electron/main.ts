@@ -307,7 +307,7 @@ async function createWindow() {
         RESOURCES_PATH: process.resourcesPath,
         LEARA_USER_DATA: userDataPath,
         NODE_PATH: combinedNodePath,
-        LEARA_SYSTEM_PATH: resolvedEnv.PATH || process.env.PATH || '',
+        LEARA_SYSTEM_PATH: resolvedEnv.PATH || resolvedEnv.Path || process.env.PATH || '',
       }
     });
 
