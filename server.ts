@@ -1452,6 +1452,56 @@ app.get("/api/actions/logs", async (req, res) => {
 });
 
 // --- Terminal Integration ---
+function buildTerminalEnv(cwd: string, userRoot: string, isWindows: boolean): Record<string, string> {
+  const env: any = { ...process.env };
+  
+  // 1. Restore the real system PATH that Electron captured at startup
+  //    LEARA_SYSTEM_PATH contains the user's full login-shell PATH
+  const systemPath = process.env.LEARA_SYSTEM_PATH || process.env.PATH || '';
+  
+  // 2. Add node_modules/.bin from the cwd (like VS Code and npm do)
+  const localBin = path.join(cwd, 'node_modules', '.bin');
+  
+  // 3. On Windows, also ensure common tool directories are present
+  const extraPaths: string[] = [localBin];
+  if (isWindows) {
+    const userProfile = process.env.USERPROFILE || os.homedir();
+    extraPaths.push(
+      path.join(userProfile, 'AppData', 'Roaming', 'npm'),        // global npm
+      path.join(userProfile, 'AppData', 'Local', 'Programs', 'Python', 'Python312', 'Scripts'), // pip
+      path.join(userProfile, '.cargo', 'bin'),                      // Rust
+      path.join(userProfile, 'go', 'bin'),                          // Go
+      path.join(userProfile, 'AppData', 'Local', 'pnpm'),          // pnpm
+      path.join(userProfile, 'scoop', 'shims'),                    // Scoop
+    );
+  } else {
+    extraPaths.push(
+      path.join(os.homedir(), '.nvm', 'versions', 'node', 'current', 'bin'),
+      path.join(os.homedir(), '.cargo', 'bin'),
+      path.join(os.homedir(), 'go', 'bin')
+    );
+  }
+  
+  const separator = isWindows ? ';' : ':';
+  env.PATH = [...extraPaths, systemPath].filter(Boolean).join(separator);
+  
+  // 4. Set proper shell environment variables
+  env.HOME = userRoot;
+  env.USERPROFILE = userRoot;
+  env.TERM = 'xterm-256color';
+  
+  // 5. Windows-critical: ensure system vars are present
+  if (isWindows) {
+    env.SystemRoot = env.SystemRoot || 'C:\\Windows';
+    env.COMSPEC = env.COMSPEC || 'C:\\Windows\\System32\\cmd.exe';
+    env.HOMEDRIVE = env.HOMEDRIVE || 'C:';
+    env.HOMEPATH = env.HOMEPATH || '\\Users\\' + os.userInfo().username;
+    env.PATHEXT = env.PATHEXT || '.COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PS1;.PSC1';
+  }
+  
+  return env;
+}
+
 async function startServer() {
   const server = http.createServer(app);
   const wss = new WebSocketServer({ noServer: true });
@@ -1469,6 +1519,26 @@ async function startServer() {
       }
     } catch (e) {
       console.warn(`[TERMINAL] mkdir failed (expected if path exists): ${e}`);
+    }
+
+    let fsWatcher: ReturnType<typeof fs.watch> | null = null;
+    let fsChangeTimeout: NodeJS.Timeout | null = null;
+
+    try {
+      fsWatcher = fs.watch(userPath, { recursive: true }, (eventType, filename) => {
+        if (!filename) return;
+        const skip = /^(\.git[\/\\]|node_modules[\/\\].*[\/\\])/.test(filename);
+        if (skip) return;
+        
+        if (fsChangeTimeout) clearTimeout(fsChangeTimeout);
+        fsChangeTimeout = setTimeout(() => {
+          if (ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify({ type: 'fs:changed', filename }));
+          }
+        }, 1000);
+      });
+    } catch (e) {
+      console.warn('[FS-WATCH] Could not start watcher:', e);
     }
 
     const isWindows = process.platform === "win32";
@@ -1522,12 +1592,7 @@ async function startServer() {
         cols: 80,
         rows: 24,
         cwd: userPath,
-        env: { 
-          ...process.env, 
-          HOME: userRoot,
-          USERPROFILE: userRoot,
-          TERM: "xterm-256color" 
-        }
+        env: buildTerminalEnv(userPath, userRoot, isWindows)
       });
 
       console.log(`[PTY] Session started: ${shell} in ${userPath}`);
@@ -1566,6 +1631,8 @@ async function startServer() {
 
     ws.on("close", () => {
       console.log(`[PTY] Session closed`);
+      if (fsWatcher) fsWatcher.close();
+      if (fsChangeTimeout) clearTimeout(fsChangeTimeout);
       ptyProcess.kill();
     });
 

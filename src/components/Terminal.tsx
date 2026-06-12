@@ -236,6 +236,17 @@ function TerminalInstance({ id, type, isActive }: TerminalInstanceProps) {
 
         ws.onmessage = (event) => {
           const data = event.data?.toString?.() || String(event.data || '');
+          
+          try {
+            if (data.startsWith('{')) {
+              const msg = JSON.parse(data);
+              if (msg.type === 'fs:changed') {
+                useStore.getState().triggerRefreshFiles();
+                return;
+              }
+            }
+          } catch (e) { }
+
           try {
             const state = useStore.getState();
             const t = state.terminals.find((tt) => tt.id === id);

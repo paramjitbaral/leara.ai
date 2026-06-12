@@ -23,6 +23,36 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function resolveShellEnv(): Promise<Record<string, string>> {
+  try {
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+
+    if (process.platform === 'win32') {
+      const { stdout } = await execAsync('powershell -NoProfile -Command "Get-ChildItem Env: | ForEach-Object { $_.Key + \'=\' + $_.Value }"');
+      const env: Record<string, string> = { ...process.env as Record<string, string> };
+      stdout.split('\n').forEach((line: string) => {
+        const idx = line.indexOf('=');
+        if (idx > 0) env[line.substring(0, idx)] = line.substring(idx + 1).trim();
+      });
+      return env;
+    } else {
+      const shell = process.env.SHELL || '/bin/bash';
+      const { stdout } = await execAsync(`"${shell}" -ilc env`);
+      const env: Record<string, string> = { ...process.env as Record<string, string> };
+      stdout.split('\n').forEach((line: string) => {
+        const idx = line.indexOf('=');
+        if (idx > 0) env[line.substring(0, idx)] = line.substring(idx + 1).trim();
+      });
+      return env;
+    }
+  } catch (err) {
+    console.error('[Electron] Failed to resolve shell env:', err);
+    return process.env as Record<string, string>;
+  }
+}
+
 async function waitForUrl(url: string, attempts = 40, delayMs = 500) {
   for (let i = 0; i < attempts; i++) {
     const ok = await new Promise<boolean>((resolve) => {
@@ -264,16 +294,20 @@ async function createWindow() {
     console.log(`[Electron] App path: ${appPath}`);
     console.log(`[Electron] NODE_PATH: ${combinedNodePath}`);
     
+    // Resolve the user's real shell environment (like VS Code does)
+    const resolvedEnv = await resolveShellEnv();
+    
     serverProcess = fork(serverPath, [], {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       env: { 
-        ...process.env, 
+        ...resolvedEnv,
         NODE_ENV: 'production',
         PORT: port.toString(),
         ELECTRON_RUN_AS_NODE: '1',
         RESOURCES_PATH: process.resourcesPath,
         LEARA_USER_DATA: userDataPath,
-        NODE_PATH: combinedNodePath
+        NODE_PATH: combinedNodePath,
+        LEARA_SYSTEM_PATH: resolvedEnv.PATH || process.env.PATH || '',
       }
     });
 
@@ -355,6 +389,9 @@ ipcMain.on('window-close', () => getTargetWindow()?.close());
 ipcMain.on('window-new', () => {
   createWindow();
 });
+
+// Store resolved env for the server to use in PTY sessions
+ipcMain.handle('get-system-env', async () => await resolveShellEnv());
 
 // Google Login IPC - Open External Browser
 ipcMain.on('login-with-google', async () => {

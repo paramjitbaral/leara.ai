@@ -3,7 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('electron', {
   ipcRenderer: {
     send: (channel: string, data: any) => {
-      const validChannels = ['login-with-google', 'window-minimize', 'window-maximize', 'window-close', 'window-new'];
+      const validChannels = ['login-with-google', 'window-minimize', 'window-maximize', 'window-close', 'window-new', 'get-system-env'];
       if (validChannels.includes(channel)) {
         ipcRenderer.send(channel, data);
       }
@@ -15,6 +15,13 @@ contextBridge.exposeInMainWorld('electron', {
         ipcRenderer.on(channel, subscription);
         return () => ipcRenderer.removeListener(channel, subscription);
       }
+    },
+    invoke: (channel: string, ...args: any[]) => {
+      const validChannels = ['get-system-env'];
+      if (validChannels.includes(channel)) {
+        return ipcRenderer.invoke(channel, ...args);
+      }
+      return Promise.reject(new Error(`Invalid channel: ${channel}`));
     }
   }
 });
